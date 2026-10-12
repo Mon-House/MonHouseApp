@@ -108,6 +108,15 @@
       "device": "e7dc4759aa07d9ad1158e35d1e3670ac7d2311a3bdf7c341a6098bc49142b55f",
       "txHash": "b0ecebc0181c23d1a31be3e4bd9f0c9b412ef6cca4f484723d6c92e74438cd61",
       "ts": 1791783025148
+    },
+    {
+      "id": "cmv4td6brc9p3",
+      "name": "Paulghz",
+      "message": "Congrats for the work on NimHouse",
+      "value": 10000,
+      "device": "e7dc4759aa07d9ad1158e35d1e3670ac7d2311a3bdf7c341a6098bc49142b55f",
+      "txHash": "2cdee6073b81b72bef3321c150ba6e0ed5c16ce15a258ce41e008e7e82dc61dd",
+      "ts": 1791783050107
     }
   ]
 }
