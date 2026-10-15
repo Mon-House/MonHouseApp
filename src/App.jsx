@@ -306,8 +306,9 @@ function CupCard({ tick }) {
   const curClosed = !!(cup?.period && pool?.closedPeriods?.[cup.period.id])
   const normalLabel = `closes ${cup?.period?.end ?? '…'} · ${cup?.period?.closeUtc ?? '16:00'} UTC (${cup?.period?.daysLeft ?? '…'}d left)`
   let closeLabel = normalLabel
-  if (pool?.paused) {
-    closeLabel = 'cup PAUSED — P6911 paid on-chain ✓ · next cup will be announced by the house'
+  const paused = !!pool?.paused
+  if (paused) {
+    closeLabel = 'cup PAUSED — no prize pool right now · P6911 paid on-chain ✓ · next cup will be announced by the house'
   } else if (curClosed && cup?.period?.endMs) {
     const nextOpen = new Date(cup.period.endMs)
     closeLabel = `closed — paid on-chain ✓ · next cup opens ${nextOpen.toISOString().slice(0, 10)} · ${nextOpen.toISOString().slice(11, 16)} UTC`
@@ -322,14 +323,23 @@ function CupCard({ tick }) {
   return (
     <div className="card cup-card">
       <h3>
-        🏆 NimHouse Cup — {cup?.period?.id || '…'}
+        🏆 NimHouse Cup — {cup?.board?.isLast ? `${cup.board.period} (final)` : cup?.period?.id || '…'}
         <span className="cup-period">{' '}</span>
         <span className="cup-period">· {closeLabel}</span>
       </h3>
       <p className="cup-pool">
-        {pool?.perGameDailyNim ?? 100} NIM per game per cup · top 3 take{' '}
-        {pool?.splitPct?.join(' / ') ?? '50 / 30 / 20'}% · staked by the <b>NimHouse wallet</b>
-        {walletReady && <span className="cup-wallet"> · {pool.wallet.slice(0, 6)}…{pool.wallet.slice(-4)}</span>}
+        {paused ? (
+          <>
+            Prize pool paused by the house · <b>the leaderboard stays open</b> · last cup{' '}
+            {cup?.board?.paid ? 'paid on-chain ✓' : 'paid on-chain'}
+          </>
+        ) : (
+          <>
+            {pool?.perGameDailyNim ?? 100} NIM per game per cup · top 3 take{' '}
+            {pool?.splitPct?.join(' / ') ?? '50 / 30 / 20'}% · staked by the <b>NimHouse wallet</b>
+            {walletReady && <span className="cup-wallet"> · {pool.wallet.slice(0, 6)}…{pool.wallet.slice(-4)}</span>}
+          </>
+        )}
       </p>
       {cup ? (
         <div className="cup-board">
@@ -340,10 +350,10 @@ function CupCard({ tick }) {
               <div className="cup-row" key={g}>
                 <div className="cup-game">{CUP_NAMES[g]}</div>
                 <div className="cup-top">
-                  {top.length === 0 && <span className="cup-empty">no entries yet — be first</span>}
-                  {top.slice(0, 3).map((e, i) => (
+                  {top.length === 0 && <span className="cup-empty">no entries in this cup</span>}
+                  {top.slice(0, 5).map((e, i) => (
                     <span className="cup-medal" key={e.device} title={e.device}>
-                      <b>{['🥇', '🥈', '🥉'][i]}</b> {e.name} <b>{e.score}</b>
+                      <b>{i < 3 ? ['🥇', '🥈', '🥉'][i] : `#${i + 1}`}</b> {e.name} <b>{e.score}</b>
                     </span>
                   ))}
                   {paid && <span className="badge verified">paid ✓</span>}
@@ -359,11 +369,24 @@ function CupCard({ tick }) {
           </div>
         )
       )}
+      {cup?.board?.note && <p className="cup-note board-note">{cup.board.note}</p>}
       <p className="cup-note">
-        Free to play · no entry fee, no gambling. Finish any game → <b>Enter the NimHouse Cup</b>{' '}
-        (signs with your Nimiq wallet). One entry per device per game per cup — best score
-        counts. Top 3 per game get paid on-chain at the end of each cup. Pool, entries &amp;
-        payouts are public in the open-source repo.
+        Free to play · no entry fee, no gambling.{' '}
+        {paused ? (
+          <>
+            The cup is paused, so there is no pool to win right now — but every game still keeps
+            its leaderboard: your runs are ranked in-game (top 5 on your device) and the last
+            cup's standings with their on-chain payout transactions stay public below. When the
+            house funds the next cup, signed entries reopen and this notice disappears.
+          </>
+        ) : (
+          <>
+            Finish any game → <b>Enter the NimHouse Cup</b> (signs with your Nimiq wallet). One
+            entry per device per game per cup — best score counts. Top 3 per game get paid
+            on-chain at the end of each cup. Pool, entries &amp; payouts are public in the
+            open-source repo.
+          </>
+        )}
       </p>
     </div>
   )
@@ -590,6 +613,22 @@ export default function App() {
   const [lbTab, setLbTab] = useState('chick')
   const [lbTick, setLbTick] = useState(0)
   const [cheerTick, setCheerTick] = useState(0)
+  // Cup state, fetched once for the game screens: the in-game leaderboard must
+  // stay up even while the cup is paused (no prize pool) — scores keep counting.
+  const [cupState, setCupState] = useState(null)
+  useEffect(() => {
+    if (typeof fetch === 'undefined') return
+    let alive = true
+    fetch('/api/cup')
+      .then((r) => r.json())
+      .then((j) => {
+        if (alive && j?.ok) setCupState({ paused: !!j.pool?.paused, period: j.period, board: j.board })
+      })
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
 
   // toast
   const [toast, setToast] = useState(null)
@@ -940,6 +979,7 @@ export default function App() {
     },
     onScore: () => setLbTick((t) => t + 1),
     walletMode: wallet?.mode,
+    cupState,
   }
 
   // ---------------- game views ----------------
@@ -1136,7 +1176,9 @@ export default function App() {
       <div className="card">
         <h3>
           Leaderboard{' '}
-          <span style={{ letterSpacing: 0, textTransform: 'none', fontWeight: 400 }}>(this device)</span>
+          <span style={{ letterSpacing: 0, textTransform: 'none', fontWeight: 400 }}>
+            (this device · always on, prize or no prize)
+          </span>
         </h3>
         <div className="lb-tabs">
           {GAMES.map((g) => (
