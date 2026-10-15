@@ -93,7 +93,7 @@ function pipeBody(ctx, x, y, w, h, isTop, t, mood) {
   pipeFace(ctx, x + w / 2, fy, t, mood)
 }
 
-export default function NimChick({ skin, player, onExit, onScore, requestVerify, walletMode, requestCup }) {
+export default function NimChick({ skin, player, onExit, onScore, requestVerify, walletMode, requestCup, cupState }) {
   const canvasRef = useRef(null)
   const stageRef = useRef(null)
   const controls = useRef({ replay: () => {} })
@@ -429,6 +429,8 @@ export default function NimChick({ skin, player, onExit, onScore, requestVerify,
         {phase === 'over' && (
           <div className="overlay">
             <ScoreOverlay
+              gameId="chick"
+              cupState={cupState}
               gameLabel="NimChick"
               score={score}
               best={best}
