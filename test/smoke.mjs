@@ -138,6 +138,10 @@ check('game-over overlay appears', document.body.textContent.includes('Play agai
 const lb = JSON.parse(window.localStorage.getItem('nimhouse.lb.chick') || '[]')
 check('score auto-recorded to leaderboard', lb.length > 0)
 check('leaderboard entry has name', lb[0]?.name === 'SmokeTest')
+// the in-game board is always rendered — cup running or paused
+check('in-game mini leaderboard rendered', !!document.querySelector('.lb-mini'))
+check('mini board lists this run as you', !!document.querySelector('.lb-mini .lb-row.me .lb-you'))
+check('cup entry button present when the cup is not paused', allButtons().some((b) => b.textContent.includes('Enter the NimHouse Cup')))
 
 // verify flow (demo signing)
 const verifyBtn = allButtons().find((b) => b.textContent.includes('Verify score'))
