@@ -533,6 +533,48 @@ input {
   padding: 6px 0;
 }
 
+/* in-game mini board: always visible, prize or no prize */
+.lb-mini {
+  margin: 12px 0 2px;
+  padding: 10px 10px 6px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--card2);
+  text-align: left;
+}
+.lb-mini-head {
+  font-size: 11px;
+  font-weight: 800;
+  letter-spacing: 1.1px;
+  text-transform: uppercase;
+  color: var(--amber);
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  margin-bottom: 4px;
+}
+.lb-mini-sub {
+  font-size: 10px;
+  font-weight: 600;
+  letter-spacing: 0.2px;
+  text-transform: none;
+  color: var(--dim);
+}
+.lb-row.me .lb-name,
+.lb-row.me .lb-score {
+  color: var(--green);
+}
+.lb-you {
+  margin-left: 6px;
+  font-size: 9.5px;
+  font-weight: 800;
+  letter-spacing: 0.8px;
+  color: var(--green);
+  border: 1px solid var(--green);
+  border-radius: 6px;
+  padding: 0 4px;
+}
+
 /* ---------- fair strip + footer ---------- */
 .fair-strip {
   display: flex;
@@ -812,6 +854,10 @@ canvas.game {
 .cup-empty {
   color: var(--dim);
   font-style: italic;
+}
+.cup-note.board-note {
+  color: var(--amber);
+  font-weight: 600;
 }
 .cup-note {
   margin: 8px 0 0;
