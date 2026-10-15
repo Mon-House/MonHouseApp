@@ -68,6 +68,11 @@ schedule; earlier cups ran 2–3 days), independently per game.
   [`data/cup.json`](data/cup.json). Anyone can audit every entry and payment.
   The house may pause between cups (`pool.paused` in the ledger): while paused,
   new cup entries are rejected server-side and the hub shows a PAUSED label.
+- **Leaderboards never go dark.** Every game shows its top-5 board on the round-over screen, and
+  the hub keeps the full board — prize or no prize. While the cup is paused the entry button turns
+  into *View the leaderboard*, and `GET /api/cup` returns the last cup that has entries
+  (`board.period`, `board.isLast`) with its payout hashes, so the standings of the final cup stay
+  public instead of seven empty rows. Scores keep counting; only the pool is off.
 
 ### Cup API (Vercel serverless functions)
 
