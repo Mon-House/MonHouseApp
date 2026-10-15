@@ -1,11 +1,18 @@
 import { useState } from 'react'
+import { loadLB } from '../leaderboard'
 
 /**
  * Shared "round over" overlay for all games.
  * Handles the wallet-verified score badge + optional NimHouse Cup entry.
+ *
+ * Leaderboard policy: the board is ALWAYS shown in-game, prize or no prize.
+ * When the house pauses the Cup (no pool to pay), the entry button turns into
+ * a leaderboard button and the standings of the last played cup stay public
+ * on the hub — scores keep counting, only the prize is off.
  */
 export default function ScoreOverlay({
   gameLabel,
+  gameId,
   score,
   best,
   isBest,
@@ -17,6 +24,7 @@ export default function ScoreOverlay({
   entryId,
   walletMode,
   onCup,
+  cupState,
 }) {
   const [verifying, setVerifying] = useState(false)
   const [verified, setVerified] = useState(false)
@@ -25,6 +33,15 @@ export default function ScoreOverlay({
   const [cupBusy, setCupBusy] = useState(false)
   const [cupDone, setCupDone] = useState(null)
   const [cupErr, setCupErr] = useState(null)
+
+  // Per-device board, read at render time so this run is already on it.
+  // Top 5 always show; if this run did not make the cut it is appended with
+  // its real rank, because a player must always see the score they just made.
+  const board = gameId ? loadLB(gameId) : []
+  const top5 = board.slice(0, 5)
+  const myIdx = entryId ? board.findIndex((e) => e.id === entryId) : -1
+  const rows = myIdx >= 5 ? [...top5, { ...board[myIdx], rank: myIdx + 1 }] : top5
+  const paused = !!cupState?.paused
 
   async function doCup() {
     if (cupBusy || cupDone) return
@@ -95,21 +112,28 @@ export default function ScoreOverlay({
       )}
       {err && <div className="quote">{err}</div>}
 
-      {onCup && !cupDone && (
-        <button
-          className="btn gold block"
-          onClick={doCup}
-          disabled={cupBusy}
-          title="Signs this score with your Nimiq wallet to enter the daily Cup"
-        >
-          {cupBusy ? (
-            <>
-              <span className="spin" /> Signing…
-            </>
-          ) : (
-            <>🏆 Enter the NimHouse Cup</>
-          )}
+      {paused ? (
+        <button className="btn gold block" onClick={onExit} title="Opens the house leaderboard">
+          🏆 View the leaderboard
         </button>
+      ) : (
+        onCup &&
+        !cupDone && (
+          <button
+            className="btn gold block"
+            onClick={doCup}
+            disabled={cupBusy}
+            title="Signs this score with your Nimiq wallet to enter the daily Cup"
+          >
+            {cupBusy ? (
+              <>
+                <span className="spin" /> Signing…
+              </>
+            ) : (
+              <>🏆 Enter the NimHouse Cup</>
+            )}
+          </button>
+        )
       )}
       {cupDone && (
         <div className="cup-line ok">
@@ -117,6 +141,32 @@ export default function ScoreOverlay({
         </div>
       )}
       {cupErr && <div className="cup-line err">{cupErr}</div>}
+      {paused && (
+        <div className="cup-line">
+          Cup paused — no prize pool right now. Scores still count and the leaderboard stays up.
+        </div>
+      )}
+
+      <div className="lb-mini">
+        <div className="lb-mini-head">
+          {gameLabel} · top 5 on this device
+          <span className="lb-mini-sub">no prize needed — the board never closes</span>
+        </div>
+        {rows.length === 0 ? (
+          <div className="lb-empty">No runs yet — be the first on the board.</div>
+        ) : (
+          rows.map((e, i) => (
+            <div className={`lb-row${e.id === entryId ? ' me' : ''}`} key={e.id}>
+              <div className="lb-rank">{e.rank || i + 1}</div>
+              <div className="lb-name">
+                {e.name} {e.verified && <span className="badge verified">✓</span>}
+                {e.id === entryId && <span className="lb-you">you</span>}
+              </div>
+              <div className="lb-score">{e.score}</div>
+            </div>
+          ))
+        )}
+      </div>
 
       <div className="btns">
         <div className="row">
