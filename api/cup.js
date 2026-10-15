@@ -76,13 +76,31 @@ export default async function handler(req, res) {
   try {
     const data = await readCup()
     const period = cupPeriod()
+
+    // Leaderboards never go dark. When the current window has no entries — the
+    // cup is paused, or it closed early and was paid — fall back to the latest
+    // cup that does have entries, so players always see a real board (with its
+    // payout transactions) instead of seven empty rows.
+    const periodsWithEntries = (p) =>
+      GAMES.some((g) => (data.entries?.[g]?.[p] || []).length > 0)
+    let boardPeriod = period.id
+    if (!periodsWithEntries(boardPeriod)) {
+      const played = Object.keys(data.entries?.chick || {})
+        .concat(Object.keys(data.entries?.stack || {}))
+        .filter((p) => /^P\d+$/.test(p) && periodsWithEntries(p))
+        .sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))
+      if (played.length) boardPeriod = played[played.length - 1]
+    }
+    const boardIsLast = boardPeriod !== period.id
+
     const leaders = {}
     for (const g of GAMES) {
-      const list = data.entries?.[g]?.[period.id] || []
+      const list = data.entries?.[g]?.[boardPeriod] || []
       leaders[g] = [...list].sort((a, b) => b.score - a.score).slice(0, 10)
     }
     const payouts = {}
-    for (const g of GAMES) payouts[g] = data.payouts?.[g]?.[period.id] || null
+    for (const g of GAMES)
+      payouts[g] = data.payouts?.[g]?.[boardPeriod] || data.payouts?.[g]?.[period.id] || null
     res.json({
       ok: true,
       period,
@@ -90,6 +108,14 @@ export default async function handler(req, res) {
       pool: data.pool,
       leaders,
       payouts,
+      board: {
+        period: boardPeriod,
+        isLast: boardIsLast,
+        paid: GAMES.every((g) => payouts[g]),
+        note: boardIsLast
+          ? `Final standings of ${boardPeriod} — shown while the cup is paused. The leaderboard stays up whether or not there is a prize.`
+          : '',
+      },
     })
   } catch (e) {
     res.status(503).json({ ok: false, error: e.message.slice(0, 160) })
