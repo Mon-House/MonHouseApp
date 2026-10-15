@@ -212,7 +212,7 @@ function drawKnife(ctx, x, y, ang) {
   ctx.restore()
 }
 
-export default function NimSlice({ skin, player, onExit, onScore, requestVerify, walletMode, requestCup }) {
+export default function NimSlice({ skin, player, onExit, onScore, requestVerify, walletMode, requestCup, cupState }) {
   const canvasRef = useRef(null)
   const stageRef = useRef(null)
   const controls = useRef({ replay: () => {} })
@@ -785,6 +785,8 @@ export default function NimSlice({ skin, player, onExit, onScore, requestVerify,
         {phase === 'over' && (
           <div className="overlay">
             <ScoreOverlay
+              gameId="slice"
+              cupState={cupState}
               gameLabel="NimSlice"
               score={score}
               best={best}
