@@ -31,7 +31,7 @@ function flyPos(t, score) {
   }
 }
 
-export default function NimSwat({ player, onExit, onScore, requestVerify, walletMode, requestCup }) {
+export default function NimSwat({ player, onExit, onScore, requestVerify, walletMode, requestCup, cupState }) {
   const canvasRef = useRef(null)
   const stageRef = useRef(null)
   const controls = useRef({ replay: () => {} })
@@ -382,6 +382,8 @@ export default function NimSwat({ player, onExit, onScore, requestVerify, wallet
         {phase === 'over' && (
           <div className="overlay">
             <ScoreOverlay
+              gameId="swat"
+              cupState={cupState}
               gameLabel="NimSwat"
               score={score}
               best={best}
