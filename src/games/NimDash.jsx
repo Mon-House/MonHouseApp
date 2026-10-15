@@ -78,7 +78,7 @@ function drawLuna(ctx, x, y, t) {
   ctx.restore()
 }
 
-export default function NimDash({ skin, player, onExit, onScore, requestVerify, walletMode, requestCup }) {
+export default function NimDash({ skin, player, onExit, onScore, requestVerify, walletMode, requestCup, cupState }) {
   const canvasRef = useRef(null)
   const stageRef = useRef(null)
   const controls = useRef({ replay: () => {} })
@@ -745,6 +745,8 @@ export default function NimDash({ skin, player, onExit, onScore, requestVerify, 
         {phase === 'over' && (
           <div className="overlay">
             <ScoreOverlay
+              gameId="dash"
+              cupState={cupState}
               gameLabel="NimDash"
               score={score}
               best={best}
