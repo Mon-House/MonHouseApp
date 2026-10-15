@@ -79,7 +79,7 @@ const QUOTES = [
 
 
 
-export default function NimBullseye({ skin, player, onExit, onScore, requestVerify, walletMode, requestCup }) {
+export default function NimBullseye({ skin, player, onExit, onScore, requestVerify, walletMode, requestCup, cupState }) {
   const canvasRef = useRef(null)
   const stageRef = useRef(null)
   const controls = useRef({ replay: () => {} })
@@ -692,6 +692,8 @@ export default function NimBullseye({ skin, player, onExit, onScore, requestVeri
         {phase === 'over' && (
           <div className="overlay">
             <ScoreOverlay
+              gameId="bull"
+              cupState={cupState}
               gameLabel="NimBullseye"
               score={score}
               best={best}
