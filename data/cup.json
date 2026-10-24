@@ -19,40 +19,13 @@
     "wallet": "0xe5b41b1e42580ddb14F277578D5f92Fc091DAD1d",
     "network": "Monad Mainnet (Chain ID 143)",
     "closeAt": "2026-10-25T12:45:00.000Z",
-    "closeLabel": "Minggu 25 Okt · 19:45 WIB",
+    "closeLabel": "Minggu 25 Okt \u00b7 19:45 WIB",
     "rule": "Skor tertinggi lintas semua game",
     "autoPayout": true,
     "paused": false,
     "closedPeriods": {},
     "note": "Free to play on Monad Mainnet. Snapshot pemenang diambil pada closeAt (19:45 WIB). Peringkat dihitung dari skor tertinggi pemain lintas SEMUA game. Top 5 berbagi 600 MON (180 / 150 / 120 / 90 / 60), didistribusikan otomatis oleh wallet MonHouse."
   },
-  "entries": {
-    "dash": {
-      "P20261025": [
-        {
-          "device": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
-          "name": "DiagBot",
-          "score": 57,
-          "address": "",
-          "pub": "",
-          "verified": false,
-          "ts": 1792846887879
-        }
-      ]
-    },
-    "chick": {
-      "P20261025": [
-        {
-          "device": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
-          "name": "DiagBot2",
-          "score": 33,
-          "address": "",
-          "pub": "",
-          "verified": false,
-          "ts": 1792847027628
-        }
-      ]
-    }
-  },
+  "entries": {},
   "payouts": {}
 }
