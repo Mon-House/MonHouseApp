@@ -52,6 +52,19 @@
           "ts": 1792855495547
         }
       ]
+    },
+    "rush": {
+      "P20261025": [
+        {
+          "device": "143f3edc38a1bbbafbfd80ffed9208fd016f9da6e01dd17e8cf15e5571784dea",
+          "name": "Anonim",
+          "score": 24,
+          "address": "",
+          "pub": "",
+          "verified": false,
+          "ts": 1792855508113
+        }
+      ]
     }
   },
   "payouts": {}
