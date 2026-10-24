@@ -1,5 +1,7 @@
 # MonHouse 🐾⚡ — Monad Mainnet Absurd Cat Arcade
 
+**🌐 Live: https://monhouse.fun**
+
 **MonHouse** (migrated & rebranded from NimHouse) is a colorful, sharp arcade hub featuring **5 skill-based mini-games** starring absurd chonky cats on **Monad Mainnet**.
 
 ## Monad Mainnet Configuration

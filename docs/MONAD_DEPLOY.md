@@ -1,5 +1,7 @@
 # MonHouse — Panduan Deploy GitHub & Vercel (Monad Mainnet)
 
+> Domain resmi produksi: **https://monhouse.fun** (DNS di Hostinger → Vercel).
+
 ## 1. Spesifikasi Jaringan Monad Mainnet
 - **Network Name:** `Monad`
 - **Chain ID:** `143` (`0x8f`)
