@@ -1,37 +1,47 @@
 /**
- * GitHub-file-backed JSON store for NimHouse (Cup + name claims).
+ * JSON store for MonHouse (Cup + name claims + cheers) on Monad Testnet.
  *
- * Everything lives in `data/*.json` of this public repo — fully
- * transparent: anyone can inspect every entry, payout, and name claim in
- * the repo history.
- *
- * Required Vercel env vars (set in the Vercel dashboard / CLI, NEVER in code):
- *   CUP_GITHUB_TOKEN  fine-grained token with Contents: read/write on this repo
- *   CUP_GITHUB_REPO   "owner/repo"
+ * Dual-mode transparent storage:
+ *  - On Vercel with CUP_GITHUB_TOKEN set: reads/writes `data/*.json` via the
+ *    GitHub Contents API (auto-detects VERCEL_GIT_REPO_OWNER/VERCEL_GIT_REPO_SLUG
+ *    or uses CUP_GITHUB_REPO) so the public repo acts as an auditable ledger.
+ *  - Locally / without CUP_GITHUB_TOKEN: reads/writes `data/*.json` directly
+ *    from disk (with in-memory cache fallback on read-only serverless fs).
  */
+import fs from 'node:fs/promises'
+import nodePath from 'node:path'
 
-const BRANCH = 'main'
 const CACHE_TTL = 15_000
 
 const SEEDS = {
   'data/cup.json': () => ({
-    version: 1,
+    version: 2,
     pool: {
-      perGameDailyNim: 100,
+      perGameMon: 5,
       splitPct: [50, 30, 20],
-      wallet: 'PENDING — NimHouse wallet address',
-      stakeTx: '',
-      note: 'Cup data is seeded until the repo file exists.',
+      wallet: '0xe5b41b1e42580ddb14F277578D5f92Fc091DAD1d',
+      network: 'Monad Testnet (Chain ID 10143)',
+      closedPeriods: {},
+      paused: false,
+      note: 'Free to play on Monad Testnet. Top 3 wallet-verified scores per game share the MON prize pool (50 / 30 / 20%).',
     },
     entries: {},
     payouts: {},
   }),
-  'data/names.json': () => ({ version: 1, names: {} }),
-  'data/cheers.json': () => ({ version: 1, cheers: [] }),
+  'data/names.json': () => ({ version: 2, names: {} }),
+  'data/cheers.json': () => ({ version: 2, cheers: [] }),
 }
 
 function repo() {
-  return process.env.CUP_GITHUB_REPO || 'sasam44/nimhouse'
+  if (process.env.CUP_GITHUB_REPO) return process.env.CUP_GITHUB_REPO
+  if (process.env.VERCEL_GIT_REPO_OWNER && process.env.VERCEL_GIT_REPO_SLUG) {
+    return `${process.env.VERCEL_GIT_REPO_OWNER}/${process.env.VERCEL_GIT_REPO_SLUG}`
+  }
+  return 'sasam44/nimhouse'
+}
+
+function branch() {
+  return process.env.CUP_GITHUB_BRANCH || process.env.VERCEL_GIT_COMMIT_REF || 'main'
 }
 
 async function gh(path, opts = {}) {
@@ -42,7 +52,7 @@ async function gh(path, opts = {}) {
       Authorization: `Bearer ${token}`,
       Accept: 'application/vnd.github+json',
       'Content-Type': 'application/json',
-      'User-Agent': 'nimhouse-cup',
+      'User-Agent': 'monhouse-cup',
       ...(opts.headers || {}),
     },
   })
@@ -61,34 +71,56 @@ export async function readJsonFile(path, { fresh = false } = {}) {
   if (!SEEDS[path]) throw new Error(`unknown store file: ${path}`)
   if (!fresh && caches.get(path)?.data && Date.now() - caches.get(path).at < CACHE_TTL)
     return caches.get(path).data
+
   const token = process.env.CUP_GITHUB_TOKEN
+  const ref = branch()
   let data = null
+
   if (token) {
     try {
-      const blob = await gh(`/repos/${repo()}/contents/${path}?ref=${BRANCH}`)
+      const blob = await gh(`/repos/${repo()}/contents/${path}?ref=${encodeURIComponent(ref)}`)
       data = JSON.parse(Buffer.from(blob.content, 'base64').toString('utf8'))
     } catch (e) {
       if (e.status !== 404) throw e
     }
+  } else {
+    try {
+      const diskPath = nodePath.resolve(process.cwd(), path)
+      const raw = await fs.readFile(diskPath, 'utf8')
+      data = JSON.parse(raw)
+    } catch {
+      /* fall back to seed */
+    }
   }
+
   if (!data) data = SEEDS[path]()
   if (!caches.get(path)?.data || fresh) caches.set(path, { at: Date.now(), data })
   return data
 }
 
-/**
- * Read-modify-write with a short retry on conflict.
- * `mutator(data)` returns the next data, or null to skip the write.
- */
 export async function writeJsonFile(path, mutator) {
-  if (!process.env.CUP_GITHUB_TOKEN) throw new Error('cup-not-configured')
+  if (!process.env.CUP_GITHUB_TOKEN) {
+    const data = await readJsonFile(path, { fresh: true })
+    const next = mutator(structuredClone(data))
+    if (!next) return data
+    try {
+      const diskPath = nodePath.resolve(process.cwd(), path)
+      await fs.writeFile(diskPath, JSON.stringify(next, null, 2) + '\n', 'utf8')
+    } catch {
+      /* read-only serverless fs without token: update in-memory cache */
+    }
+    caches.set(path, { at: Date.now(), data: next })
+    return next
+  }
+
+  const ref = branch()
   for (let attempt = 0; attempt < 3; attempt++) {
     const data = await readJsonFile(path, { fresh: true })
-    const next = mutator(data)
+    const next = mutator(structuredClone(data))
     if (!next) return data
     let sha = ''
     try {
-      const blob = await gh(`/repos/${repo()}/contents/${path}?ref=${BRANCH}`)
+      const blob = await gh(`/repos/${repo()}/contents/${path}?ref=${encodeURIComponent(ref)}`)
       sha = blob.sha
     } catch (e) {
       if (e.status !== 404) throw e
@@ -96,7 +128,7 @@ export async function writeJsonFile(path, mutator) {
     const body = {
       message: `${path.split('/').pop()}: update ${new Date().toISOString()}`,
       content: Buffer.from(JSON.stringify(next, null, 2)).toString('base64'),
-      branch: BRANCH,
+      branch: ref,
     }
     if (sha) body.sha = sha
     try {
@@ -105,7 +137,7 @@ export async function writeJsonFile(path, mutator) {
         body: JSON.stringify(body),
       })
     } catch (e) {
-      if (e.status === 409 || e.status === 422) continue // conflict — retry with fresh read
+      if (e.status === 409 || e.status === 422) continue
       throw e
     }
     caches.set(path, { at: Date.now(), data: next })
@@ -114,7 +146,6 @@ export async function writeJsonFile(path, mutator) {
   throw new Error('cup-write-conflict')
 }
 
-// ---- cup.json convenience API (used by existing endpoints) ----
 export async function readCup(opts) {
   return readJsonFile('data/cup.json', opts)
 }

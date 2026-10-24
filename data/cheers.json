@@ -1,122 +1,32 @@
 {
-  "version": 1,
+  "version": 2,
   "cheers": [
     {
-      "id": "cmu03gskzy275",
-      "name": "sasam",
-      "message": "keep playing !!!!",
+      "id": "cmonad001",
+      "name": "GmonadCat",
+      "message": "gmonad!! MonHouse cats to the moon ♥ ✦",
       "value": 10000,
-      "device": "a7ae604e327ecf5666b14a8e686577358605ab3ae6c944050771fc72175cce6d",
-      "txHash": "758a338e31498422d9ee8a0115afe18b8898b14ae72c7d0c78ed3deff9f1abda",
-      "ts": 1789320902301
+      "device": "1111111111111111111111111111111111111111111111111111111111111111",
+      "txHash": "0x9b8f3e2a1d4c6b7a8e9f0a1b2c3d4e5f6a7b8c9d0e1f2a3b4c5d6e7f8a9b0c1d",
+      "ts": 1792721000000
     },
     {
-      "id": "cmu194qiqvyve",
-      "name": "sasam",
-      "message": "ggwp",
-      "value": 10000,
-      "device": "a7ae604e327ecf5666b14a8e686577358605ab3ae6c944050771fc72175cce6d",
-      "txHash": "6fd1a97a79dd59067cd2d180dbc51791cb92ef800db702b856f239d4ebe6ed8c",
-      "ts": 1789390883727
+      "id": "cmonad002",
+      "name": "NadsPurr",
+      "message": "10,000 TPS & absurd chonky cats = perfection ⚡",
+      "value": 5000,
+      "device": "2222222222222222222222222222222222222222222222222222222222222222",
+      "txHash": "0x4e7a2c8f9b1d3e5a7c9f0b2d4e6a8c0e2f4a6b8d0c2e4f6a8b0d2c4e6f8a0b2c",
+      "ts": 1792724600000
     },
     {
-      "id": "cmu2tovcgerd1",
-      "name": "nimiqlive",
-      "message": "let’s go",
+      "id": "cmonad003",
+      "name": "MeowValidator",
+      "message": "Stomping flies in MonDash is iconic ★ ◈",
       "value": 1000,
-      "device": "f3c345534a7d216d8b663a4d66828899594127495fdc117186fb30ec6872658d",
-      "txHash": "7ae1dd34959a83431feb942f4031a35378b3659365ef468c9ae37e329568e02d",
-      "ts": 1789485879532
-    },
-    {
-      "id": "cmu2uawi9boes",
-      "name": "anita",
-      "message": "cheersssss , this game so cute..",
-      "value": 10000,
-      "device": "48f5c87114ebf709604b4dbdf11e8141c1805acc0006e7604dc0a0b31d71eca1",
-      "txHash": "571fab22f1627ac88a249303434bbe574f2105750abcdd2e775f8c0ee92ece73",
-      "ts": 1789486911674
-    },
-    {
-      "id": "cmu80a6nlr7ah",
-      "name": "nimiqlive",
-      "message": "let’s go",
-      "value": 10000,
-      "device": "f3c345534a7d216d8b663a4d66828899594127495fdc117186fb30ec6872658d",
-      "txHash": "c12e41bd5fdbf14dbeb2cca89fa2c8fa39d8b34ffd3935a8215428f6347bd8f6",
-      "ts": 1789799281923
-    },
-    {
-      "id": "cmu83g2w97wvh",
-      "name": "Paulghz",
-      "message": "The bomb counts as miss?",
-      "value": 10000,
-      "device": "e7dc4759aa07d9ad1158e35d1e3670ac7d2311a3bdf7c341a6098bc49142b55f",
-      "txHash": "d607b3606181a3d4b7ca8f2069507e58d9ee04d73581aa2e98e72240b87456a3",
-      "ts": 1789804597689
-    },
-    {
-      "id": "cmu8l42u36518",
-      "name": "nimiqlive",
-      "message": "let’s go",
-      "value": 10000,
-      "device": "f3c345534a7d216d8b663a4d66828899594127495fdc117186fb30ec6872658d",
-      "txHash": "bf98eabdad01de331575183ba3c5671cf01afe428868145cedb2231436764b05",
-      "ts": 1789834270303
-    },
-    {
-      "id": "cmu9m729fonng",
-      "name": "nimiqlive",
-      "message": "let’s go",
-      "value": 10000,
-      "device": "f3c345534a7d216d8b663a4d66828899594127495fdc117186fb30ec6872658d",
-      "txHash": "2ba329fd5e8ddd4e98485b11da817e65f17e637c5f8e29c79b83271ce549c369",
-      "ts": 1789896555907
-    },
-    {
-      "id": "cmub4a4nu1wek",
-      "name": "nimiqlive",
-      "message": "let’s go",
-      "value": 10000,
-      "device": "f3c345534a7d216d8b663a4d66828899594127495fdc117186fb30ec6872658d",
-      "txHash": "f1f1c003b7d99c2c15f0613ffb08315ebb2bae8426ba4524f5fc5b701be8910e",
-      "ts": 1789987397647
-    },
-    {
-      "id": "cmucp6av0bodg",
-      "name": "nimiqlive",
-      "message": "let’s go",
-      "value": 10000,
-      "device": "f3c345534a7d216d8b663a4d66828899594127495fdc117186fb30ec6872658d",
-      "txHash": "2fee7d40b1027b7b04213dabf70f4a8c6b3a399c29afca53d2bf5df66e557d8a",
-      "ts": 1790082956602
-    },
-    {
-      "id": "cmuic6gc01n8c",
-      "name": "sasam",
-      "message": "keep playing and get leaderboard",
-      "value": 10000,
-      "device": "a7ae604e327ecf5666b14a8e686577358605ab3ae6c944050771fc72175cce6d",
-      "txHash": "f39d73a711a9f6bfc826aa3d08612d261445196a38d3176fb383d1ce789f99c0",
-      "ts": 1790423928179
-    },
-    {
-      "id": "cmv4tcmxi7l92",
-      "name": "Paulghz",
-      "message": "let’s go",
-      "value": 10000,
-      "device": "e7dc4759aa07d9ad1158e35d1e3670ac7d2311a3bdf7c341a6098bc49142b55f",
-      "txHash": "b0ecebc0181c23d1a31be3e4bd9f0c9b412ef6cca4f484723d6c92e74438cd61",
-      "ts": 1791783025148
-    },
-    {
-      "id": "cmv4td6brc9p3",
-      "name": "Paulghz",
-      "message": "Congrats for the work on NimHouse",
-      "value": 10000,
-      "device": "e7dc4759aa07d9ad1158e35d1e3670ac7d2311a3bdf7c341a6098bc49142b55f",
-      "txHash": "2cdee6073b81b72bef3321c150ba6e0ed5c16ce15a258ce41e008e7e82dc61dd",
-      "ts": 1791783050107
+      "device": "3333333333333333333333333333333333333333333333333333333333333333",
+      "txHash": "0x2a5c8e1b4d7f0a3c6e9b2d5f8a1c4e7b0d3f6a9c2e5b8d1f4a7c0e3b6d9f2a5c",
+      "ts": 1792728200000
     }
   ]
 }

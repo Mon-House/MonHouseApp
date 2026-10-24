@@ -1,72 +1,28 @@
 /**
- * GET /api/cup — current NimHouse Cup state.
- * Returns the active period, pool config, per-game top-10, and payouts.
+ * GET /api/cup — current MonHouse Cup state on Monad Testnet.
+ * Returns the active period, MON pool config, per-game top-10, and payouts.
  */
 import { readCup } from './lib/store.js'
 
-export const GAMES = ['chick', 'stack', 'bull', 'rush', 'swat', 'slice', 'dash']
+export const GAMES = ['chick', 'stack', 'rush', 'swat', 'dash']
 
-/**
- * Cup grid. Every cup ends at 16:00 UTC and is paid right after (house
- * policy). P6904 (first cup after the P6903 early close) opens
- * 2026-09-15T12:00Z and runs to the next 16:00 UTC anchor; P6905–P6908 are
- * 48h on the 16:00 UTC anchor; from P6909 (opened at the P6908 close,
- * 2026-09-25T16:00Z) cups run 3 days (72h) on the same anchor:
- *   P6904      = [2026-09-15T12:00Z, 2026-09-17T16:00Z)
- *   P6905–6908 = [16:00Z + (n-6905)*48h, +48h)
- *   P6909      = [2026-09-25T16:00Z, 2026-09-28T16:00Z)
- *   P6910      = [2026-09-28T16:00Z, 2026-10-05T16:59Z)  extended special cup
- *                (stake 500 NIM/game, 3,500 NIM total; closes 23:59 WIB)
- *   P{n>=6911} = [2026-10-05T16:59Z + (n-6911)*72h, +72h)
- * The frontend uses the same function for the signed message, so client and
- * server always agree on the current period.
- */
-const PERIOD_MS = 2 * 86400 * 1000 // 2-day cups (P6905–P6908)
-const PERIOD3_MS = 3 * 86400 * 1000 // 3-day cups (P6909, P6910 base window)
-const PERIOD5_MS = 5 * 86400 * 1000 // 5-day cups (P6911 onward — house budget schedule)
-const P6904_START = Date.parse('2026-09-15T12:00:00.000Z') // P6904 open
-const P6904_END = Date.parse('2026-09-17T16:00:00.000Z') // P6904 close (2 days)
-const BASE_MS = P6904_END // anchor for P6905 onward
-const BASE_P = 6905
-const P3_START = Date.parse('2026-09-25T16:00:00.000Z') // P6909 open (3-day era)
-const P3_BASE = 6909
-const P6910_START = Date.parse('2026-09-28T16:00:00.000Z')
-const P6910_END = Date.parse('2026-10-05T16:59:00.000Z') // 5 Oct 23:59 WIB — extended special cup
+const PERIOD5_MS = 5 * 86400 * 1000 // 5-day Monad Testnet Cup epochs
+const ANCHOR_START = Date.parse('2026-10-05T16:59:00.000Z')
+const ANCHOR_P = 6911
+
 export function cupPeriod(date = new Date()) {
   const t = Date.parse(date)
-  let p, start, dur
-  if (t >= P6910_END) {
-    p = 6911 + Math.floor((t - P6910_END) / PERIOD5_MS)
-    start = new Date(P6910_END + (p - 6911) * PERIOD5_MS)
-    dur = PERIOD5_MS
-  } else if (t >= P6910_START) {
-    p = 6910
-    start = new Date(P6910_START)
-    dur = P6910_END - P6910_START
-  } else if (t >= P3_START) {
-    p = P3_BASE + Math.floor((t - P3_START) / PERIOD3_MS)
-    start = new Date(P3_START + (p - P3_BASE) * PERIOD3_MS)
-    dur = PERIOD3_MS
-  } else if (t >= P6904_START && t < P6904_END) {
-    p = 6904
-    start = new Date(P6904_START)
-    dur = P6904_END - P6904_START
-  } else if (t < P6904_START) {
-    p = 6904 - 1 - Math.floor((P6904_START - 1 - t) / PERIOD_MS)
-    start = new Date(P6904_START + (p - 6904) * PERIOD_MS)
-    dur = PERIOD_MS
-  } else {
-    p = BASE_P + Math.floor((t - BASE_MS) / PERIOD_MS)
-    start = new Date(BASE_MS + (p - BASE_P) * PERIOD_MS)
-    dur = PERIOD_MS
-  }
-  const end = new Date(start.getTime() + dur)
+  const delta = Math.max(0, t - ANCHOR_START)
+  const idx = Math.floor(delta / PERIOD5_MS)
+  const p = ANCHOR_P + idx
+  const start = new Date(ANCHOR_START + idx * PERIOD5_MS)
+  const end = new Date(start.getTime() + PERIOD5_MS)
   return {
     id: `P${p}`,
     start: start.toISOString().slice(0, 10),
     end: end.toISOString().slice(0, 10),
     closeUtc: end.toISOString().slice(11, 16),
-    daysLeft: Math.max(1, Math.round((end - t) / 86400000)),
+    daysLeft: Math.max(1, Math.ceil((end.getTime() - t) / 86400000)),
   }
 }
 
@@ -77,16 +33,15 @@ export default async function handler(req, res) {
     const data = await readCup()
     const period = cupPeriod()
 
-    // Leaderboards never go dark. When the current window has no entries — the
-    // cup is paused, or it closed early and was paid — fall back to the latest
-    // cup that does have entries, so players always see a real board (with its
-    // payout transactions) instead of seven empty rows.
     const periodsWithEntries = (p) =>
       GAMES.some((g) => (data.entries?.[g]?.[p] || []).length > 0)
     let boardPeriod = period.id
     if (!periodsWithEntries(boardPeriod)) {
-      const played = Object.keys(data.entries?.chick || {})
-        .concat(Object.keys(data.entries?.stack || {}))
+      const allKeys = new Set()
+      for (const g of GAMES) {
+        for (const k of Object.keys(data.entries?.[g] || {})) allKeys.add(k)
+      }
+      const played = [...allKeys]
         .filter((p) => /^P\d+$/.test(p) && periodsWithEntries(p))
         .sort((a, b) => Number(a.slice(1)) - Number(b.slice(1)))
       if (played.length) boardPeriod = played[played.length - 1]
@@ -99,8 +54,9 @@ export default async function handler(req, res) {
       leaders[g] = [...list].sort((a, b) => b.score - a.score).slice(0, 10)
     }
     const payouts = {}
-    for (const g of GAMES)
+    for (const g of GAMES) {
       payouts[g] = data.payouts?.[g]?.[boardPeriod] || data.payouts?.[g]?.[period.id] || null
+    }
     res.json({
       ok: true,
       period,
@@ -113,7 +69,7 @@ export default async function handler(req, res) {
         isLast: boardIsLast,
         paid: GAMES.every((g) => payouts[g]),
         note: boardIsLast
-          ? `Final standings of ${boardPeriod} — shown while the cup is paused. The leaderboard stays up whether or not there is a prize.`
+          ? `Showing latest standings from ${boardPeriod} — be the first to sign a score in ${period.id}!`
           : '',
       },
     })

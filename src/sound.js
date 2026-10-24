@@ -1,6 +1,5 @@
 /**
- * Tiny WebAudio sound effects — no audio assets needed.
- * The AudioContext is created lazily on the first user gesture.
+ * Playful WebAudio sound effects for MonHouse — no external audio assets needed.
  */
 let ctx = null
 let muted = false
@@ -40,27 +39,28 @@ function beep(freq = 440, dur = 0.08, type = 'square', vol = 0.05, slideTo = 0) 
     o.start()
     o.stop(c.currentTime + dur + 0.03)
   } catch {
-    /* audio is decorative — never break the game */
+    /* audio is decorative — never break gameplay */
   }
 }
 
 export const sfx = {
-  flap: () => beep(500, 0.07, 'square', 0.045, 700),
+  // Cute upbeat cat-pounce / meow-boing chirp!
+  flap: () => beep(560, 0.085, 'triangle', 0.06, 880),
   score: () => {
-    beep(660, 0.06, 'square', 0.045)
-    setTimeout(() => beep(880, 0.09, 'square', 0.045), 70)
+    beep(700, 0.06, 'sine', 0.055)
+    setTimeout(() => beep(988, 0.09, 'sine', 0.055), 65)
   },
-  hit: () => beep(150, 0.28, 'sawtooth', 0.06, 60),
-  drop: () => beep(320, 0.08, 'triangle', 0.05, 180),
+  hit: () => beep(165, 0.28, 'sawtooth', 0.06, 55),
+  drop: () => beep(340, 0.08, 'triangle', 0.05, 190),
   thud: () => beep(220, 0.1, 'triangle', 0.05, 120),
-  pop: () => beep(900, 0.05, 'sine', 0.045),
+  pop: () => beep(940, 0.05, 'sine', 0.048),
   win: () => {
-    beep(523, 0.09, 'sine', 0.05)
-    setTimeout(() => beep(659, 0.09, 'sine', 0.05), 100)
-    setTimeout(() => beep(784, 0.16, 'sine', 0.05), 200)
+    beep(587, 0.09, 'sine', 0.055)
+    setTimeout(() => beep(740, 0.09, 'sine', 0.055), 95)
+    setTimeout(() => beep(880, 0.16, 'sine', 0.055), 190)
   },
   buy: () => {
-    beep(700, 0.07, 'sine', 0.05)
-    setTimeout(() => beep(1050, 0.1, 'sine', 0.05), 90)
+    beep(740, 0.07, 'sine', 0.055)
+    setTimeout(() => beep(1110, 0.11, 'sine', 0.055), 85)
   },
 }

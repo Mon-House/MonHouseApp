@@ -1,27 +1,21 @@
 /**
- * /api/cheer — public NimHouse cheer (tip) board.
+ * /api/cheer — public MonHouse cheer (tip) board on Monad Testnet.
  *
  * GET  → { ok, cheers: [...] }  (newest first)
- * POST → record a cheer after the wallet broadcast its payment:
- *        { name, message, value (Luna), txHash, device?, ts }
- *
- * Transparency model: the ledger is the public `data/cheers.json` file in
- * this repo (auto-committed, inspectable in history). Every entry carries
- * its on-chain tx hash so anyone can verify the payment in the explorer.
- * Entries are client-reported (the wallet itself sends the transaction),
- * de-duplicated per tx hash, and capped — enough for a fair community board.
+ * POST → record a cheer after the Monad wallet broadcast its MON payment:
+ *        { name, message, value (MON internal units), txHash, device?, ts }
  */
 import { readJsonFile, writeJsonFile } from './lib/store.js'
 
 const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 ._\-]{0,15}$/
-// The mini-app SDK returns the *serialized transaction* (hex string, variable
-// length — not a 64-char hash), so accept any hex/base64-looking identifier.
-const TX_RE = /^(0x)?[A-Za-z0-9+/=_-]{40,2048}$/
-const MAX_VALUE = 1_000_000_000_000 // 10,000,000 NIM — sanity cap
+const TX_RE = /^(0x)?[A-Za-z0-9+/=_-]{16,2048}$/
+const MAX_VALUE = 1_000_000_000_000
 const MAX_ENTRIES = 200
 
 function cleanMsg(m) {
-  return String(m ?? '').replace(/[\u0000-\u001f\u007f]/g, '').slice(0, 60)
+  return String(m ?? '')
+    .replace(/[\u0000-\u001f\u007f]/g, '')
+    .slice(0, 60)
 }
 
 export default async function handler(req, res) {
@@ -33,8 +27,6 @@ export default async function handler(req, res) {
 
   try {
     if (req.method === 'GET') {
-      // ?fresh=1 bypasses the in-memory cache — used right after a cheer,
-      // since POST/GET may land on different serverless instances.
       const fresh = req.query?.fresh === '1'
       const data = await readJsonFile('data/cheers.json', { fresh })
       const cheers = [...(data.cheers || [])].sort((a, b) => b.ts - a.ts)
@@ -46,7 +38,8 @@ export default async function handler(req, res) {
       const name = String(b.name ?? '').trim()
       const message = cleanMsg(b.message)
       const value = Math.floor(Number(b.value))
-      const txHash = String(b.txHash ?? '').replace(/^0x/i, '0x')
+      const rawTx = String(b.txHash ?? '').trim()
+      const txHash = rawTx.startsWith('0x') || rawTx.startsWith('demo_') ? rawTx : `0x${rawTx}`
       const device = String(b.device ?? '').toLowerCase()
       const ts = Math.floor(Number(b.ts))
 
@@ -54,8 +47,10 @@ export default async function handler(req, res) {
       if (!Number.isFinite(value) || value < 1 || value > MAX_VALUE)
         return res.status(400).json({ ok: false, error: 'bad value' })
       if (!TX_RE.test(txHash)) return res.status(400).json({ ok: false, error: 'bad tx hash' })
-      if (device && !/^[0-9a-f]{64}$/.test(device)) return res.status(400).json({ ok: false, error: 'bad device' })
-      if (!Number.isFinite(ts) || ts > Date.now() + 60_000) return res.status(400).json({ ok: false, error: 'bad timestamp' })
+      if (device && !/^[0-9a-f]{64}$/.test(device))
+        return res.status(400).json({ ok: false, error: 'bad device' })
+      if (!Number.isFinite(ts) || ts > Date.now() + 60_000)
+        return res.status(400).json({ ok: false, error: 'bad timestamp' })
 
       const data = await readJsonFile('data/cheers.json', { fresh: true })
       const cheers = data.cheers || []
@@ -74,7 +69,6 @@ export default async function handler(req, res) {
 
       const next = await writeJsonFile('data/cheers.json', (d) => {
         const list = d.cheers || []
-        // re-check dedupe on the fresh write
         if (list.some((c) => String(c.txHash).toLowerCase() === txHash.toLowerCase())) return null
         list.push(entry)
         while (list.length > MAX_ENTRIES) list.shift()

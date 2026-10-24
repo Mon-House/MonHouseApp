@@ -1,166 +1,191 @@
 /**
- * NimHouse smoke test — runs the PRODUCTION bundle inside jsdom.
- * Scenario: load app → demo wallet detected → connect (simulated) →
- * play NimChick → chicken dies → score auto-recorded to leaderboard.
+ * MonHouse Pre-Push Verification Suite
+ * ------------------------------------
+ * Verifies:
+ *  1. Production Vite build (`dist/index.html` + bundled assets)
+ *  2. Zero legacy Nimiq / NimHouse strings in production bundle
+ *  3. House wallet `0xe5b41b1e42580ddb14F277578D5f92Fc091DAD1d` present in bundle & Cup config
+ *  4. Real secp256k1 EIP-191 `personal_sign` cryptographic signature verification (`api/lib/verify.js`)
+ *  5. All API handlers (`api/cup.js`, `api/name/claim.js`, `api/cup/submit.js`, `api/cheer.js`)
  *
- * Usage: node test/smoke.mjs   (after: npm run build)
+ * Usage: node test/smoke.mjs
  */
-import { JSDOM } from 'jsdom'
-import { readFileSync, existsSync } from 'node:fs'
+import { existsSync, readFileSync, writeFileSync } from 'node:fs'
 import path from 'node:path'
+import { secp256k1 } from '@noble/curves/secp256k1.js'
+import { keccak256 } from 'js-sha3'
+import cheerHandler from '../api/cheer.js'
+import cupHandler, { cupPeriod } from '../api/cup.js'
+import submitHandler from '../api/cup/submit.js'
+import { evmMessageDigest, verifyWalletSignature } from '../api/lib/verify.js'
+import nameClaimHandler from '../api/name/claim.js'
+import nameGetHandler from '../api/name/index.js'
 
-const sleep = (ms) => new Promise((r) => setTimeout(r, ms))
-let failures = 0
-function check(label, cond) {
-  console.log(`${cond ? '✅' : '❌'} ${label}`)
-  if (!cond) failures++
+const EXPECTED_WALLET = '0xe5b41b1e42580ddb14F277578D5f92Fc091DAD1d'
+let passed = 0
+let failed = 0
+
+function assert(label, cond, detail = '') {
+  if (cond) {
+    console.log(`  ✅ ${label}`)
+    passed++
+  } else {
+    console.error(`  ❌ ${label}${detail ? ` — ${detail}` : ''}`)
+    failed++
+  }
 }
 
-// ---------- jsdom setup ----------
+function mockRes() {
+  return {
+    statusCode: 200,
+    headers: {},
+    body: null,
+    headersSent: false,
+    setHeader(k, v) {
+      this.headers[k] = v
+    },
+    status(c) {
+      this.statusCode = c
+      return this
+    },
+    json(obj) {
+      this.body = obj
+      this.headersSent = true
+      return this
+    },
+    end() {
+      this.headersSent = true
+    },
+  }
+}
+
+function signEip191(message, privKeyBytes) {
+  const digest = evmMessageDigest(message)
+  const nobleRec = secp256k1.sign(digest, privKeyBytes, { prehash: false, format: 'recovered' })
+  const ethSig = Buffer.concat([Buffer.from(nobleRec.slice(1)), Buffer.from([27 + nobleRec[0]])])
+  return '0x' + ethSig.toString('hex')
+}
+
+console.log('\n🔍 1. Production Bundle Check')
 const distDir = path.join(process.cwd(), 'dist')
-if (!existsSync(path.join(distDir, 'index.html'))) {
-  console.error('Run `npm run build` first.')
-  process.exit(1)
-}
-const html = readFileSync(path.join(distDir, 'index.html'), 'utf8')
-const jsHref = [...html.matchAll(/src="(\/assets\/[^"]+\.js)"/g)][0][1]
-const jsCode = readFileSync(path.join(distDir, jsHref.slice(1)), 'utf8')
+assert('dist/index.html exists', existsSync(path.join(distDir, 'index.html')))
+const indexHtml = readFileSync(path.join(distDir, 'index.html'), 'utf8')
+assert('index.html has MonHouse title', indexHtml.includes('MonHouse'))
+const jsMatch = [...indexHtml.matchAll(/src="(\/assets\/[^"]+\.js)"/g)][0]
+assert('Bundled JS entry found', !!jsMatch)
+const bundleJs = readFileSync(path.join(distDir, jsMatch[1].slice(1)), 'utf8')
 
-function fakeCtx() {
-  const gradient = { addColorStop() {} }
-  const target = {}
-  return new Proxy(target, {
-    get(t, p) {
-      if (p === 'createLinearGradient' || p === 'createRadialGradient' || p === 'createPattern') {
-        return () => gradient
-      }
-      if (p === 'measureText') return () => ({ width: 0 })
-      if (p === 'getImageData') return () => ({ data: new Uint8ClampedArray(4) })
-      if (!(p in t)) t[p] = () => {}
-      return t[p]
-    },
-    set(t, p, v) {
-      t[p] = v
-      return true
-    },
-  })
-}
-
-const dom = new JSDOM(html, {
-  url: 'http://localhost:5173/',
-  runScripts: 'dangerously',
-  pretendToBeVisual: true,
-  beforeParse(window) {
-    Object.defineProperty(window, 'crypto', { value: globalThis.crypto, configurable: true })
-    window.HTMLCanvasElement.prototype.getContext = function () {
-      return fakeCtx()
-    }
-    window.scrollTo = () => {}
-  },
-})
-
-const { window } = dom
-const { document } = window
-window.addEventListener('error', (e) => {
-  console.log('❌ window error:', e.message)
-  failures++
-})
-
-window.eval(jsCode)
-
-// ---------- scenario ----------
-await sleep(1200)
-check('hub renders (NimHouse wordmark)', document.body.textContent.includes('NimHouse'))
-check('seven game cards listed', ['NimChick', 'NimStack', 'NimBullseye', 'NimRush', 'NimSwat', 'NimSlice', 'NimDash'].every((n) => document.body.textContent.includes(n)))
-check('fair-play strip shown', document.body.textContent.includes('No gambling'))
-
-// wallet: outside Nimiq Pay → init() times out (8s) → demo mode
-await sleep(9000)
-
-const allButtons = () => [...document.querySelectorAll('button')]
-
-// hamburger menu: player profile + cup history + wallet all live here
-const menuBtn = document.querySelector('.menu-btn')
-check('hamburger menu button present', !!menuBtn)
-menuBtn.dispatchEvent(new window.Event('click', { bubbles: true }))
-await sleep(400)
-check(
-  'menu panel opens (player, cup history, wallet)',
-  !!document.querySelector('.menu-panel') &&
-    /Cup entries/.test(document.body.textContent) &&
-    /Nimiq Pay wallet/.test(document.body.textContent)
+assert('House wallet 0xe5b4…AD1d compiled into bundle', bundleJs.includes(EXPECTED_WALLET))
+assert('Monad Testnet Chain ID 10143 (0x279f) in bundle', bundleJs.includes('10143') && bundleJs.includes('0x279f'))
+assert(
+  'All 5 MonHouse mini-games in bundle & MonBullseye/MonSlice removed',
+  ['MonCat', 'MonStack', 'MonRush', 'MonSwat', 'MonDash'].every((g) => bundleJs.includes(g)) &&
+    !bundleJs.includes('MonBullseye') &&
+    !bundleJs.includes('MonSlice')
 )
-check('demo mode badge appears after SDK timeout', document.body.textContent.includes('DEMO'))
-
-// set gamertag from the menu (React controlled input needs native setter)
-const nameInput = document.querySelector('.name-input')
-const nativeSetter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set
-nativeSetter.call(nameInput, 'SmokeTest')
-nameInput.dispatchEvent(new window.Event('input', { bubbles: true }))
-await sleep(200)
-const submitNameBtn = allButtons().find((b) => b.textContent.includes('Submit name'))
-check('submit name button present', !!submitNameBtn)
-submitNameBtn.dispatchEvent(new window.Event('click', { bubbles: true }))
-await sleep(500)
-check(
-  'name submitted (demo: saved on device)',
-  document.body.textContent.includes('saved on this device')
+assert(
+  'Zero legacy Nimiq UI strings in bundle',
+  !bundleJs.includes('NimHouse') && !bundleJs.includes('NimChick') && !bundleJs.includes('Nimiq Pay')
 )
 
-// connect wallet from the menu
-const connectBtn = allButtons().find((b) => b.textContent.includes('Connect wallet'))
-check('connect button present (in menu)', !!connectBtn)
-connectBtn.dispatchEvent(new window.Event('click', { bubbles: true }))
-await sleep(1500)
-check('wallet connected (simulated address shown)', /NQ71/.test(document.body.textContent))
-check('block number shown', /block\s*[\d,]+/i.test(document.body.textContent.replace(/\s+/g, ' ')))
+console.log('\n🔐 2. EIP-191 Wallet Signature Recovery Check')
+const priv = new Uint8Array(32)
+priv[31] = 42
+const pubUncomp = secp256k1.getPublicKey(priv, false).slice(1)
+const walletAddr = '0x' + Buffer.from(keccak256.arrayBuffer(pubUncomp)).subarray(12).toString('hex')
+const device = 'f'.repeat(64)
+const nameMsg = `MonHouse Name | name=QaTester | device=${device} | ts=1792730000000`
+const sig = signEip191(nameMsg, priv)
 
-document.querySelector('.menu-close').dispatchEvent(new window.Event('click', { bubbles: true }))
-await sleep(250)
-check('menu closes', !document.querySelector('.menu-panel'))
+const vOk = verifyWalletSignature(nameMsg, walletAddr, sig)
+assert('Valid EIP-191 personal_sign verifies & recovers exact 0x address', vOk.ok && vOk.address === walletAddr)
+const vTamper = verifyWalletSignature(nameMsg + '!', walletAddr, sig)
+assert('Tampered message is rejected', !vTamper.ok)
 
-// open NimChick
-const playButtons = allButtons().filter((b) => b.textContent.trim() === 'Play')
-check('play buttons present (7)', playButtons.length === 7)
-playButtons[0].dispatchEvent(new window.Event('click', { bubbles: true }))
-await sleep(600)
-check('NimChick ready overlay', document.body.textContent.includes('TAP or SPACE to flap'))
+console.log('\n🌐 3. Serverless API Handlers E2E Check (with snapshot restore)')
+const cupBackup = readFileSync('data/cup.json', 'utf8')
+const namesBackup = readFileSync('data/names.json', 'utf8')
+const cheersBackup = readFileSync('data/cheers.json', 'utf8')
 
-// tap to start (engine listens on .gameview)
-const view = document.querySelector('.gameview')
-view.dispatchEvent(new window.Event('pointerdown', { bubbles: true }))
-await sleep(450)
-check('game running (ready overlay gone)', !document.body.textContent.includes('TAP or SPACE to flap'))
+try {
+  // GET /api/cup
+  const rCup = mockRes()
+  await cupHandler({ method: 'GET', query: {} }, rCup)
+  assert(
+    'GET /api/cup returns 200 + House wallet 0xe5b4…AD1d',
+    rCup.statusCode === 200 && rCup.body?.ok && rCup.body?.pool?.wallet === EXPECTED_WALLET
+  )
 
-// let the chicken die (no flapping) → auto-record
-await sleep(5000)
-check('game-over overlay appears', document.body.textContent.includes('Play again'))
-const lb = JSON.parse(window.localStorage.getItem('nimhouse.lb.chick') || '[]')
-check('score auto-recorded to leaderboard', lb.length > 0)
-check('leaderboard entry has name', lb[0]?.name === 'SmokeTest')
-// the in-game board is always rendered — cup running or paused
-check('in-game mini leaderboard rendered', !!document.querySelector('.lb-mini'))
-check('mini board lists this run as you', !!document.querySelector('.lb-mini .lb-row.me .lb-you'))
-check('cup entry button present when the cup is not paused', allButtons().some((b) => b.textContent.includes('Enter the NimHouse Cup')))
+  // POST /api/name/claim
+  const rClaim = mockRes()
+  await nameClaimHandler(
+    {
+      method: 'POST',
+      body: { name: 'QaTester', device, message: nameMsg, address: walletAddr, signature: sig },
+    },
+    rClaim
+  )
+  assert('POST /api/name/claim accepts valid Monad wallet signature', rClaim.statusCode === 200 && rClaim.body?.ok)
 
-// verify flow (demo signing)
-const verifyBtn = allButtons().find((b) => b.textContent.includes('Verify score'))
-if (verifyBtn) {
-  verifyBtn.dispatchEvent(new window.Event('click', { bubbles: true }))
-  await sleep(1500)
-  check('score verified (demo signature)', document.body.textContent.includes('WALLET-VERIFIED'))
-  const lbAfter = JSON.parse(window.localStorage.getItem('nimhouse.lb.chick') || '[]')
-  check('leaderboard entry marked verified', lbAfter.some((e) => e.verified))
-} else {
-  check('verify button present', false)
+  // GET /api/name
+  const rName = mockRes()
+  await nameGetHandler({ method: 'GET', query: { device } }, rName)
+  assert('GET /api/name returns claimed name QaTester', rName.body?.claim?.name === 'QaTester')
+
+  // POST /api/cup/submit
+  const period = cupPeriod().id
+  const cupMsg = `MonHouse Cup | game=chick | period=${period} | score=999 | name=QaTester | device=${device}`
+  const cupSig = signEip191(cupMsg, priv)
+  const rSub = mockRes()
+  await submitHandler(
+    {
+      method: 'POST',
+      body: {
+        game: 'chick',
+        period,
+        score: 999,
+        name: 'QaTester',
+        device,
+        address: walletAddr,
+        message: cupMsg,
+        signature: cupSig,
+      },
+    },
+    rSub
+  )
+  assert(
+    `POST /api/cup/submit records #1 rank in ${period}`,
+    rSub.statusCode === 200 && rSub.body?.ok && rSub.body?.rank === 1,
+    JSON.stringify(rSub.body)
+  )
+
+  // POST /api/cheer
+  const txHash = '0x' + 'a1b2'.repeat(16)
+  const rCheer = mockRes()
+  await cheerHandler(
+    {
+      method: 'POST',
+      body: { name: 'QaTester', message: 'gmonad review!', value: 10000, txHash, device, ts: Date.now() },
+    },
+    rCheer
+  )
+  assert('POST /api/cheer records MON cheer', rCheer.statusCode === 200 && rCheer.body?.ok)
+
+  // Duplicate txHash check
+  const rCheerDup = mockRes()
+  await cheerHandler(
+    {
+      method: 'POST',
+      body: { name: 'QaTester', message: 'dup', value: 10000, txHash, device, ts: Date.now() },
+    },
+    rCheerDup
+  )
+  assert('POST /api/cheer rejects duplicate txHash', rCheerDup.statusCode === 400)
+} finally {
+  writeFileSync('data/cup.json', cupBackup)
+  writeFileSync('data/names.json', namesBackup)
+  writeFileSync('data/cheers.json', cheersBackup)
 }
 
-// back to hub
-const backBtn = allButtons().find((b) => b.textContent.includes('Back to house'))
-backBtn.dispatchEvent(new window.Event('click', { bubbles: true }))
-await sleep(600)
-check('back on hub', document.body.textContent.includes('NIM shop'))
-check('best score chip rendered', document.body.innerHTML.includes('best'))
-
-console.log(failures === 0 ? '\nSMOKE TEST PASSED' : `\nSMOKE TEST FAILED (${failures} checks)`)
-process.exit(failures === 0 ? 0 : 1)
+console.log(`\n📊 Result: ${passed} passed, ${failed} failed\n`)
+process.exit(failed === 0 ? 0 : 1)

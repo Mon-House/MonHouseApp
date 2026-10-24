@@ -1,27 +1,28 @@
 /**
- * Shared canvas art helpers — cheerful cartoon "fake-3D" style.
- * Bold outlines, gradients, highlights, soft shading. No game state here.
+ * Shared canvas art helpers for MonHouse — sharp, colorful cartoon & 2.5D style.
+ * Features the official MonHouse Absurd Cute Cat sprite (`cat.png`) with
+ * pre-baked offscreen skin-tinted canvases (fast 60fps & immune to mobile/Safari
+ * ctx.filter quirks), bouncy squash-and-stretch animation, custom accessories,
+ * and a full procedural absurd-cat fallback!
  */
 
-import chickUrl from './assets/chick.png'
+import catUrl from './assets/cat.png'
 
-/**
- * The official NimHouse chick sprite (user-provided art, transparent PNG).
- * Loaded async; until it is ready we fall back to the procedural chicken so
- * nothing ever renders empty (jsdom / first frame / offline).
- */
-let chickSpriteReady = false
-const chickSprite = typeof Image !== 'undefined' ? new Image() : null
-if (chickSprite) {
-  chickSprite.onload = () => {
-    chickSpriteReady = true
+let catSpriteReady = false
+const tintedCache = new Map()
+const catSprite = typeof Image !== 'undefined' ? new Image() : null
+if (catSprite) {
+  catSprite.onload = () => {
+    catSpriteReady = true
+    tintedCache.clear()
   }
-  chickSprite.src = chickUrl
+  catSprite.src = catUrl
 }
 
-export function chickSpriteIsReady() {
-  return chickSpriteReady
+export function catSpriteIsReady() {
+  return catSpriteReady
 }
+export const chickSpriteIsReady = catSpriteIsReady
 
 /** hex → hue (0..360) */
 function hexHue(hex) {
@@ -41,92 +42,174 @@ function hexHue(hex) {
   return (hue * 60 + 360) % 360
 }
 
-/** The sprite body is saturated yellow (hue ≈ 52). Tint it toward the skin's wing hue. */
-function chickTint(skin) {
-  const wing = skin?.colors?.wing || '#ffd9a0'
-  let rot = Math.round(hexHue(wing) - 52)
-  if (rot > 180) rot -= 360
-  if (rot < -180) rot += 360
-  if (Math.abs(rot) < 12) return null
-  return `hue-rotate(${rot}deg)`
+function rgbToHsl(r, g, b) {
+  r /= 255
+  g /= 255
+  b /= 255
+  const max = Math.max(r, g, b)
+  const min = Math.min(r, g, b)
+  let h = 0
+  let s = 0
+  const l = (max + min) / 2
+  if (max !== min) {
+    const d = max - min
+    s = l > 0.5 ? d / (2 - max - min) : d / (max + min)
+    if (max === r) h = ((g - b) / d + (g < b ? 6 : 0)) / 6
+    else if (max === g) h = ((b - r) / d + 2) / 6
+    else h = ((r - g) / d + 4) / 6
+  }
+  return [h * 360, s, l]
+}
+
+function hslToRgb(h, s, l) {
+  h = ((h % 360) + 360) % 360 / 360
+  if (s === 0) {
+    const v = Math.round(l * 255)
+    return [v, v, v]
+  }
+  const hue2rgb = (p, q, t) => {
+    if (t < 0) t += 1
+    if (t > 1) t -= 1
+    if (t < 1 / 6) return p + (q - p) * 6 * t
+    if (t < 1 / 2) return q
+    if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6
+    return p
+  }
+  const q = l < 0.5 ? l * (1 + s) : l + s - l * s
+  const p = 2 * l - q
+  return [
+    Math.round(hue2rgb(p, q, h + 1 / 3) * 255),
+    Math.round(hue2rgb(p, q, h) * 255),
+    Math.round(hue2rgb(p, q, h - 1 / 3) * 255),
+  ]
 }
 
 /**
- * Draw the NimHouse chick.
- * Prefers the official sprite (tinted to the skin, accessories overlaid);
- * falls back to the procedural chicken when the sprite is not loaded yet.
+ * Returns a pre-baked offscreen canvas (or raw image for classic) for `skin`.
+ * Uses direct pixel HSL fur-hue rotation (cached once per skin ID!) so:
+ *  1) Eyes, white sclera, pink tongue, and dark outline stay crisp and natural!
+ *  2) ZERO `ctx.filter` is ever set on the main gameplay canvas (100% bug-free on
+ *     iOS Safari, Android WebView, and Chromium software/GPU pipelines!).
  */
-export function drawChicken(ctx, x, y, s, skin, t = 0, flap = 0, rot = 0) {
-  if (chickSpriteReady && chickSprite && chickSprite.naturalWidth > 0 && ctx.drawImage) {
-    drawChickenSprite(ctx, x, y, s, skin, t, flap, rot)
-    return
+function getTintedCatSource(skin) {
+  if (!skin || skin.id === 'classic' || typeof document === 'undefined') {
+    return catSprite
   }
-  drawChickenCanvas(ctx, x, y, s, skin, t, flap, rot)
+  const key = skin.id
+  if (tintedCache.has(key)) return tintedCache.get(key)
+
+  try {
+    const w = catSprite.naturalWidth || 512
+    const h = catSprite.naturalHeight || 512
+    const off = document.createElement('canvas')
+    off.width = w
+    off.height = h
+    const octx = off.getContext('2d')
+    octx.drawImage(catSprite, 0, 0, w, h)
+
+    const targetHue = hexHue(skin?.colors?.wing || '#ff8c12')
+    const hueShift = targetHue - 35 // cat.png orange coat median hue ≈ 35°
+    const imgData = octx.getImageData(0, 0, w, h)
+    const d = imgData.data
+    for (let i = 0; i < d.length; i += 4) {
+      if (d[i + 3] < 12) continue
+      const [hue, sat, lig] = rgbToHsl(d[i], d[i + 1], d[i + 2])
+      // Rotate warm orange/amber fur pixels (hue 8°..58°, saturated, non-outline)
+      // while preserving blue/green heterochromia eyes, white sclera & pink blep tongue!
+      if (hue >= 8 && hue <= 58 && sat > 0.25 && lig > 0.16 && lig < 0.88) {
+        const [nr, ng, nb] = hslToRgb(hue + hueShift, Math.min(1, sat * 1.08), lig)
+        d[i] = nr
+        d[i + 1] = ng
+        d[i + 2] = nb
+      }
+    }
+    octx.putImageData(imgData, 0, 0)
+    tintedCache.set(key, off)
+    return off
+  } catch {
+    return catSprite
+  }
 }
 
-function drawChickenSprite(ctx, x, y, s, skin, t, flap, rot) {
-  const S = 54 * s
+/**
+ * Draw the absurd cute MonHouse cat!
+ * Exported as both `drawCat` and `drawChicken` so every game & thumbnail works seamlessly.
+ */
+export function drawCat(ctx, x, y, s, skin, t = 0, flap = 0, rot = 0) {
+  if (catSpriteReady && catSprite && catSprite.naturalWidth > 0 && ctx.drawImage) {
+    drawCatSprite(ctx, x, y, s, skin, t, flap, rot)
+    return
+  }
+  drawCatCanvas(ctx, x, y, s, skin, t, flap, rot)
+}
+
+export const drawChicken = drawCat
+
+function drawCatSprite(ctx, x, y, s, skin, t, flap, rot) {
+  const S = 56 * s
+  const src = getTintedCatSource(skin)
   ctx.save()
   ctx.translate(x, y)
-  ctx.rotate(rot)
-  const sy = 1 + Math.sin(flap) * 0.04
-  ctx.scale(1, sy)
-  const tint = chickTint(skin)
-  if (tint) {
-    try {
-      ctx.filter = tint
-    } catch {
-      /* filter unsupported — draw untinted */
-    }
-  }
-  ctx.drawImage(chickSprite, -S / 2, -S / 2, S, S)
-  ctx.filter = 'none'
+  if (rot) ctx.rotate(rot)
+  const bounce = Math.sin(flap) * 0.055
+  ctx.scale(1 - bounce * 0.45, 1 + bounce)
 
-  // head sits upper-right of the sprite's center
-  const hx = 0.1 * S
-  const hy = -0.19 * S
+  ctx.imageSmoothingEnabled = true
+  if ('imageSmoothingQuality' in ctx) ctx.imageSmoothingQuality = 'high'
 
+  ctx.drawImage(src, -S / 2, -S / 2, S, S)
+
+  // Calibrated landmarks on our 512x512 superhero cat.png sprite
+  // (back cyan eye ≈ (-0.04S, +0.05S), front gold eye ≈ (+0.21S, +0.05S)):
   if (skin && skin.accessory === 'helmet') {
-    ctx.fillStyle = 'rgba(185,225,255,0.85)'
+    const hx = 0.105 * S
+    const hy = 0.03 * S
+    ctx.fillStyle = 'rgba(165, 243, 252, 0.34)'
     ctx.beginPath()
-    ctx.arc(hx, hy, 0.17 * S, Math.PI * 0.92, Math.PI * 2.08)
+    ctx.arc(hx, hy, 0.31 * S, 0, Math.PI * 2)
     ctx.fill()
-    ctx.strokeStyle = 'rgba(80,140,200,0.5)'
-    ctx.lineWidth = 1.6 * s
+    ctx.strokeStyle = 'rgba(131, 110, 249, 0.9)'
+    ctx.lineWidth = 2.2 * s
     ctx.stroke()
-    ctx.fillStyle = 'rgba(255,255,255,0.6)'
+    ctx.fillStyle = 'rgba(255,255,255,0.68)'
     ctx.beginPath()
-    ctx.ellipse(hx - 0.06 * S, hy - 0.09 * S, 0.06 * S, 0.028 * S, -0.5, 0, Math.PI * 2)
+    ctx.ellipse(hx - 0.11 * S, hy - 0.14 * S, 0.09 * S, 0.038 * S, -0.55, 0, Math.PI * 2)
     ctx.fill()
   } else if (skin && skin.accessory === 'sunglasses') {
-    ctx.fillStyle = '#141414'
-    rr(ctx, hx - 0.11 * S, hy - 0.015 * S, 0.085 * S, 0.06 * S, 0.012 * S)
+    ctx.fillStyle = '#0f0a1e'
+    ctx.strokeStyle = '#c084fc'
+    ctx.lineWidth = 1.5 * s
+    rr(ctx, -0.095 * S, -0.175 * S, 0.2 * S, 0.145 * S, 0.035 * S)
     ctx.fill()
-    rr(ctx, hx + 0.045 * S, hy - 0.045 * S, 0.085 * S, 0.06 * S, 0.012 * S)
+    ctx.stroke()
+    rr(ctx, 0.155 * S, -0.155 * S, 0.155 * S, 0.12 * S, 0.03 * S)
     ctx.fill()
-    ctx.fillRect(hx - 0.025 * S, hy - 0.005 * S, 0.07 * S, 0.012 * S)
-    ctx.fillStyle = 'rgba(255,255,255,0.35)'
-    ctx.fillRect(hx - 0.095 * S, hy - 0.008 * S, 0.025 * S, 0.01 * S)
-    ctx.fillRect(hx + 0.06 * S, hy - 0.038 * S, 0.025 * S, 0.01 * S)
+    ctx.stroke()
+    ctx.fillStyle = '#c084fc'
+    ctx.fillRect(0.105 * S, -0.115 * S, 0.052 * S, 0.022 * S)
+    ctx.fillStyle = 'rgba(255,255,255,0.5)'
+    ctx.fillRect(-0.065 * S, -0.15 * S, 0.055 * S, 0.02 * S)
+    ctx.fillRect(0.18 * S, -0.135 * S, 0.042 * S, 0.018 * S)
   } else if (skin && skin.accessory === 'crown') {
-    const cy2 = hy - 0.15 * S
-    ctx.fillStyle = '#ffd23f'
+    const cx2 = 0.1 * S
+    const cy2 = -0.25 * S
+    ctx.fillStyle = '#facc15'
     ctx.beginPath()
-    ctx.moveTo(hx - 0.07 * S, cy2)
-    ctx.lineTo(hx - 0.045 * S, cy2 - 0.055 * S)
-    ctx.lineTo(hx - 0.015 * S, cy2 - 0.02 * S)
-    ctx.lineTo(hx + 0.012 * S, cy2 - 0.06 * S)
-    ctx.lineTo(hx + 0.04 * S, cy2 - 0.02 * S)
-    ctx.lineTo(hx + 0.068 * S, cy2 - 0.055 * S)
-    ctx.lineTo(hx + 0.07 * S, cy2)
+    ctx.moveTo(cx2 - 0.11 * S, cy2)
+    ctx.lineTo(cx2 - 0.08 * S, cy2 - 0.11 * S)
+    ctx.lineTo(cx2 - 0.03 * S, cy2 - 0.045 * S)
+    ctx.lineTo(cx2 + 0.015 * S, cy2 - 0.13 * S)
+    ctx.lineTo(cx2 + 0.06 * S, cy2 - 0.045 * S)
+    ctx.lineTo(cx2 + 0.11 * S, cy2 - 0.11 * S)
+    ctx.lineTo(cx2 + 0.12 * S, cy2)
     ctx.closePath()
     ctx.fill()
-    ctx.strokeStyle = 'rgba(140,90,0,0.5)'
-    ctx.lineWidth = 1.2 * s
+    ctx.strokeStyle = '#78350f'
+    ctx.lineWidth = 1.6 * s
     ctx.stroke()
-    ctx.fillStyle = '#e63946'
+    ctx.fillStyle = '#836ef9'
     ctx.beginPath()
-    ctx.arc(hx + 0.012 * S, cy2 - 0.03 * S, 0.012 * S, 0, Math.PI * 2)
+    ctx.arc(cx2 + 0.015 * S, cy2 - 0.055 * S, 0.022 * S, 0, Math.PI * 2)
     ctx.fill()
   }
   ctx.restore()
@@ -148,8 +231,30 @@ export function rr(ctx, x, y, w, h, r) {
   ctx.closePath()
 }
 
+/** Crisp vector heart icon (used for lives HUD so no OS emoji font is needed). */
+export function drawHeart(ctx, x, y, s, active = true) {
+  ctx.save()
+  ctx.translate(x, y)
+  ctx.scale(s, s)
+  ctx.beginPath()
+  ctx.moveTo(0, 3.5)
+  ctx.bezierCurveTo(-1, 1.5, -8, -1.5, -8, -5.5)
+  ctx.bezierCurveTo(-8, -9, -4.5, -10.5, -1.5, -8.5)
+  ctx.lineTo(0, -6.8)
+  ctx.lineTo(1.5, -8.5)
+  ctx.bezierCurveTo(4.5, -10.5, 8, -9, 8, -5.5)
+  ctx.bezierCurveTo(8, -1.5, 1, 1.5, 0, 3.5)
+  ctx.closePath()
+  ctx.fillStyle = active ? '#c084fc' : 'rgba(255,255,255,0.16)'
+  ctx.fill()
+  ctx.strokeStyle = active ? '#fde047' : 'rgba(255,255,255,0.25)'
+  ctx.lineWidth = 1.3
+  ctx.stroke()
+  ctx.restore()
+}
+
 function shade(hex, f) {
-  const h = hex.replace('#', '')
+  const h = (hex || '#ff9214').replace('#', '')
   const full = h.length === 3 ? h.split('').map((c) => c + c).join('') : h
   const n = parseInt(full, 16)
   const r = Math.min(255, Math.round(((n >> 16) & 255) * f))
@@ -159,266 +264,150 @@ function shade(hex, f) {
 }
 
 /**
- * Draw the absurd NimHouse chicken (cute cartoon style) — procedural fallback art.
- * @param flap wing animation phase (radians)
- * @param rot body rotation
+ * Procedural fallback art: Cute Absurd Chubby Cat
  */
-function drawChickenCanvas(ctx, x, y, s, skin, t = 0, flap = 0, rot = 0) {
-  const c = skin.colors
-  const out = 'rgba(96,56,18,0.38)'
+function drawCatCanvas(ctx, x, y, s, skin, t = 0, flap = 0, rot = 0) {
+  const c = skin?.colors || {
+    body: '#ffa424',
+    wing: '#ff8c12',
+    ears: '#ff6b9d',
+    nose: '#ff5c8a',
+    mustache: '#5b2a0e',
+  }
+  const out = '#2b1206'
   ctx.save()
   ctx.translate(x, y)
   ctx.rotate(rot)
   ctx.lineJoin = 'round'
 
-  // tail feathers (rounded, bobbing)
-  ctx.fillStyle = c.wing
-  for (let i = -1; i <= 1; i++) {
+  ctx.save()
+  ctx.translate(-14 * s, 0)
+  ctx.rotate(-0.35 + Math.sin(t * 6 + flap * 0.5) * 0.25)
+  ctx.fillStyle = c.wing || '#ff8c12'
+  rr(ctx, -15 * s, -4 * s, 16 * s, 8 * s, 4 * s)
+  ctx.fill()
+  ctx.strokeStyle = out
+  ctx.lineWidth = 1.8 * s
+  ctx.stroke()
+  ctx.restore()
+
+  ctx.fillStyle = c.body || '#ffa424'
+  ctx.beginPath()
+  ctx.ellipse(0, 1 * s, 18 * s, 15 * s, 0, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.strokeStyle = out
+  ctx.lineWidth = 2 * s
+  ctx.stroke()
+
+  ctx.fillStyle = 'rgba(255, 245, 214, 0.78)'
+  ctx.beginPath()
+  ctx.ellipse(3 * s, 5 * s, 12 * s, 8.5 * s, 0, 0, Math.PI * 2)
+  ctx.fill()
+
+  for (const [ex, ey, tilt] of [
+    [-4 * s, -11 * s, -0.25],
+    [13 * s, -11 * s, 0.22],
+  ]) {
     ctx.save()
-    ctx.translate(-12 * s, i * 4 * s)
-    ctx.rotate(-0.55 + i * 0.3 + Math.sin(t * 4 + i) * 0.1)
+    ctx.translate(ex, ey)
+    ctx.rotate(tilt)
+    ctx.fillStyle = c.body || '#ffa424'
     ctx.beginPath()
-    ctx.ellipse(-7 * s, 0, 8.5 * s, 3.6 * s, 0, 0, Math.PI * 2)
+    ctx.moveTo(-6 * s, 2 * s)
+    ctx.lineTo(0, -10 * s)
+    ctx.lineTo(6 * s, 2 * s)
+    ctx.closePath()
     ctx.fill()
     ctx.strokeStyle = out
-    ctx.lineWidth = 1.2 * s
+    ctx.lineWidth = 1.8 * s
     ctx.stroke()
+    ctx.fillStyle = c.ears || '#ff6b9d'
+    ctx.beginPath()
+    ctx.moveTo(-3.2 * s, 1 * s)
+    ctx.lineTo(0, -6.5 * s)
+    ctx.lineTo(3.2 * s, 1 * s)
+    ctx.closePath()
+    ctx.fill()
     ctx.restore()
   }
 
-  // body
-  ctx.fillStyle = c.body
+  const pawOff = Math.sin(flap) * 2.2 * s
+  ctx.fillStyle = '#ffe5b4'
+  for (const [px, py] of [
+    [-2 * s, 11 * s + pawOff],
+    [12 * s, 10 * s - pawOff],
+  ]) {
+    ctx.beginPath()
+    ctx.arc(px, py, 4.2 * s, 0, Math.PI * 2)
+    ctx.fill()
+    ctx.strokeStyle = out
+    ctx.lineWidth = 1.5 * s
+    ctx.stroke()
+  }
+
+  ctx.fillStyle = '#fff'
   ctx.beginPath()
-  ctx.ellipse(0, 0, 16 * s, 14 * s, 0, 0, Math.PI * 2)
+  ctx.arc(3 * s, -4 * s, 6.2 * s, 0, Math.PI * 2)
   ctx.fill()
   ctx.strokeStyle = out
-  ctx.lineWidth = 1.7 * s
+  ctx.lineWidth = 1.5 * s
   ctx.stroke()
-  ctx.fillStyle = 'rgba(255,255,255,0.5)'
+  ctx.fillStyle = '#0ea5e9'
   ctx.beginPath()
-  ctx.ellipse(-4 * s, -6.5 * s, 7 * s, 4.2 * s, -0.4, 0, Math.PI * 2)
+  ctx.arc(3.6 * s, -4 * s, 3.8 * s, 0, Math.PI * 2)
+  ctx.fill()
+  ctx.fillStyle = '#111'
+  ctx.beginPath()
+  ctx.arc(3.8 * s, -4 * s, 2.2 * s, 0, Math.PI * 2)
   ctx.fill()
 
-  // wing
-  ctx.save()
-  ctx.translate(-3 * s, 1 * s)
-  ctx.rotate(-0.4 + Math.sin(flap) * 0.6)
-  ctx.fillStyle = c.wing
+  ctx.fillStyle = '#fff'
   ctx.beginPath()
-  ctx.ellipse(-6 * s, 2 * s, 9.5 * s, 5.6 * s, 0.35, 0, Math.PI * 2)
+  ctx.arc(13.5 * s, -3.5 * s, 4.6 * s, 0, Math.PI * 2)
   ctx.fill()
   ctx.strokeStyle = out
   ctx.lineWidth = 1.4 * s
   ctx.stroke()
-  ctx.strokeStyle = 'rgba(0,0,0,0.14)'
-  ctx.lineWidth = 1 * s
-  for (let i = 0; i < 3; i++) {
-    ctx.beginPath()
-    ctx.moveTo((-1.5 - i * 2.6) * s, (0 + i * 1.4) * s)
-    ctx.lineTo((-8.5 - i * 1.4) * s, (1.2 + i * 1.4) * s)
-    ctx.stroke()
-  }
-  ctx.restore()
-
-  // head (bigger = cuter)
-  ctx.fillStyle = c.body
+  ctx.fillStyle = '#22c55e'
   ctx.beginPath()
-  ctx.arc(12 * s, -13 * s, 11.5 * s, 0, Math.PI * 2)
+  ctx.arc(13.8 * s, -3.5 * s, 2.7 * s, 0, Math.PI * 2)
   ctx.fill()
-  ctx.strokeStyle = out
-  ctx.lineWidth = 1.7 * s
-  ctx.stroke()
-  ctx.fillStyle = 'rgba(255,255,255,0.45)'
+  ctx.fillStyle = '#111'
   ctx.beginPath()
-  ctx.ellipse(8.5 * s, -18 * s, 4.5 * s, 2.8 * s, -0.5, 0, Math.PI * 2)
+  ctx.arc(14 * s, -3.5 * s, 1.6 * s, 0, Math.PI * 2)
   ctx.fill()
 
-  // comb
-  ctx.fillStyle = c.comb
-  for (let i = 0; i < 3; i++) {
-    ctx.beginPath()
-    ctx.arc((7.5 + i * 4.5) * s, -24 * s - (i === 1 ? 2.5 * s : 0), 3 * s, 0, Math.PI * 2)
-    ctx.fill()
-  }
-
-  // beak
-  ctx.fillStyle = c.beak
+  ctx.fillStyle = '#fb7185'
   ctx.beginPath()
-  ctx.moveTo(21.5 * s, -16.5 * s)
-  ctx.lineTo(30.5 * s, -13 * s)
-  ctx.lineTo(21.5 * s, -11 * s)
-  ctx.closePath()
-  ctx.fill()
-  ctx.strokeStyle = out
-  ctx.lineWidth = 1.2 * s
-  ctx.stroke()
-  ctx.fillStyle = shade(c.beak, 0.75)
-  ctx.beginPath()
-  ctx.moveTo(21.5 * s, -10.5 * s)
-  ctx.lineTo(28.5 * s, -9 * s)
-  ctx.lineTo(21.5 * s, -8 * s)
-  ctx.closePath()
+  ctx.ellipse(9.2 * s, 5.2 * s, 2.5 * s, 3.3 * s, 0.08, 0, Math.PI * 2)
   ctx.fill()
 
-  // blush (cheerful)
-  ctx.fillStyle = 'rgba(255,120,140,0.4)'
+  ctx.fillStyle = c.nose || '#ff5c8a'
   ctx.beginPath()
-  ctx.arc(16.5 * s, -8.5 * s, 2.7 * s, 0, Math.PI * 2)
+  ctx.arc(9.2 * s, 0.2 * s, 2 * s, 0, Math.PI * 2)
   ctx.fill()
 
-  // googly eye
-  ctx.fillStyle = '#fff'
-  ctx.beginPath()
-  ctx.arc(15.5 * s, -15 * s, 4.8 * s, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.strokeStyle = out
-  ctx.lineWidth = 1.2 * s
-  ctx.stroke()
-  ctx.fillStyle = '#222'
-  const px = 15.5 * s + Math.sin(t * 2.2) * 1.3 * s
-  const py = -15 * s + Math.cos(t * 1.7) * 1.1 * s
-  ctx.beginPath()
-  ctx.arc(px, py, 2.2 * s, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.fillStyle = '#fff'
-  ctx.beginPath()
-  ctx.arc(px - 0.8 * s, py - 0.8 * s, 0.75 * s, 0, Math.PI * 2)
-  ctx.fill()
-
-  // absurd mustache
-  ctx.strokeStyle = c.mustache
-  ctx.lineWidth = 1.8 * s
+  ctx.strokeStyle = c.mustache || '#5b2a0e'
+  ctx.lineWidth = 2.4 * s
   ctx.lineCap = 'round'
   ctx.beginPath()
-  ctx.moveTo(24.5 * s, -7.5 * s)
-  ctx.quadraticCurveTo(27.5 * s, -9.5 * s, 29.8 * s, -7.5 * s)
-  ctx.moveTo(24.5 * s, -6.5 * s)
-  ctx.quadraticCurveTo(27 * s, -4.8 * s, 29.3 * s, -5.8 * s)
-  ctx.stroke()
-
-  // accessories
-  if (skin.accessory === 'helmet') {
-    ctx.fillStyle = 'rgba(185,225,255,0.85)'
-    ctx.beginPath()
-    ctx.arc(12 * s, -13 * s, 13 * s, Math.PI * 0.92, Math.PI * 2.08)
-    ctx.fill()
-    ctx.strokeStyle = 'rgba(80,140,200,0.5)'
-    ctx.lineWidth = 1.5 * s
-    ctx.stroke()
-    ctx.fillStyle = 'rgba(255,255,255,0.6)'
-    ctx.beginPath()
-    ctx.ellipse(8.5 * s, -19 * s, 4 * s, 1.8 * s, -0.5, 0, Math.PI * 2)
-    ctx.fill()
-  } else if (skin.accessory === 'sunglasses') {
-    ctx.fillStyle = '#141414'
-    rr(ctx, 10 * s, -19 * s, 7 * s, 5.4 * s, 2 * s)
-    ctx.fill()
-    rr(ctx, 18.5 * s, -19 * s, 7 * s, 5.4 * s, 2 * s)
-    ctx.fill()
-    ctx.fillRect(16.5 * s, -17.8 * s, 2.5 * s, 1.4 * s)
-    ctx.fillStyle = 'rgba(255,255,255,0.35)'
-    ctx.fillRect(11 * s, -18.3 * s, 2 * s, 1 * s)
-  } else if (skin.accessory === 'crown') {
-    ctx.fillStyle = '#ffd23f'
-    ctx.beginPath()
-    ctx.moveTo(6 * s, -25 * s)
-    ctx.lineTo(8 * s, -31 * s)
-    ctx.lineTo(11 * s, -26.5 * s)
-    ctx.lineTo(13.5 * s, -32 * s)
-    ctx.lineTo(16 * s, -26.5 * s)
-    ctx.lineTo(19 * s, -31 * s)
-    ctx.lineTo(20.5 * s, -25 * s)
-    ctx.closePath()
-    ctx.fill()
-    ctx.strokeStyle = 'rgba(140,90,0,0.5)'
-    ctx.lineWidth = 1.2 * s
-    ctx.stroke()
-    ctx.fillStyle = '#e63946'
-    ctx.beginPath()
-    ctx.arc(13.5 * s, -28 * s, 1.4 * s, 0, Math.PI * 2)
-    ctx.fill()
-  }
-
-  ctx.restore()
-}
-
-/**
- * Draw a dart with the TIP at local (0, -24*scale) pointing up.
- * `angle` rotates it. Cartoon shading included.
- */
-export function drawDart(ctx, x, y, angle, skin, scale = 1) {
-  const c = skin.colors
-  ctx.save()
-  ctx.translate(x, y)
-  ctx.rotate(angle)
-
-  // barrel (cylindrical gradient)
-  const g = ctx.createLinearGradient(-2.6 * scale, 0, 2.6 * scale, 0)
-  g.addColorStop(0, shade(c.barrel, 1.3))
-  g.addColorStop(0.45, c.barrel)
-  g.addColorStop(1, shade(c.barrel, 0.55))
-  ctx.fillStyle = g
-  rr(ctx, -2.6 * scale, -16 * scale, 5.2 * scale, 24 * scale, 2.4 * scale)
-  ctx.fill()
-  ctx.strokeStyle = 'rgba(0,0,0,0.3)'
-  ctx.lineWidth = 1 * scale
-  ctx.stroke()
-
-  // metallic tip (top)
-  ctx.fillStyle = '#eef2f6'
-  ctx.beginPath()
-  ctx.moveTo(0, -24.5 * scale)
-  ctx.lineTo(-2.4 * scale, -15.5 * scale)
-  ctx.lineTo(0, -15.5 * scale)
-  ctx.closePath()
-  ctx.fill()
-  ctx.fillStyle = '#9aa7b4'
-  ctx.beginPath()
-  ctx.moveTo(0, -24.5 * scale)
-  ctx.lineTo(2.4 * scale, -15.5 * scale)
-  ctx.lineTo(0, -15.5 * scale)
-  ctx.closePath()
-  ctx.fill()
-
-  // flights
-  for (const dir of [-1, 1]) {
-    ctx.fillStyle = c.flight
-    ctx.beginPath()
-    ctx.moveTo(dir * 1.5 * scale, 7.5 * scale)
-    ctx.quadraticCurveTo(dir * 11.5 * scale, 9 * scale, dir * 9 * scale, 20 * scale)
-    ctx.quadraticCurveTo(dir * 4.5 * scale, 16.5 * scale, dir * 1.5 * scale, 13.5 * scale)
-    ctx.closePath()
-    ctx.fill()
-    ctx.strokeStyle = 'rgba(0,0,0,0.3)'
-    ctx.lineWidth = 1 * scale
-    ctx.stroke()
-  }
-
-  // tail cork
-  ctx.fillStyle = '#c98a4b'
-  rr(ctx, -3.2 * scale, 13.5 * scale, 6.4 * scale, 4.5 * scale, 1.6 * scale)
-  ctx.fill()
-  ctx.strokeStyle = 'rgba(0,0,0,0.25)'
-  ctx.lineWidth = 1 * scale
+  ctx.moveTo(9 * s, 2 * s)
+  ctx.quadraticCurveTo(4 * s, 5 * s, 1 * s, 2.2 * s)
+  ctx.moveTo(9.4 * s, 2 * s)
+  ctx.quadraticCurveTo(14 * s, 5 * s, 16.8 * s, 2.2 * s)
   ctx.stroke()
 
   ctx.restore()
 }
 
-/**
- * Pseudo-3D block (front + top + right faces).
- * `y` = top of the front face; `h` = front face height.
- * `squash` 0..1 compresses vertically (bottom stays fixed).
- */
 export function drawBlock3D(ctx, x, y, w, hue, h = 26, squash = 0) {
   const hh = h * (1 - 0.2 * squash)
   const yTop = y + (h - hh)
-  const d = 7 // depth offset
-  const top = `hsl(${hue}, 64%, 68%)`
-  const front = `hsl(${hue}, 56%, 52%)`
-  const side = `hsl(${hue}, 44%, 36%)`
+  const d = 7
+  const top = `hsl(${hue}, 82%, 72%)`
+  const front = `hsl(${hue}, 76%, 56%)`
+  const side = `hsl(${hue}, 68%, 38%)`
 
-  // top face
   ctx.fillStyle = top
   ctx.beginPath()
   ctx.moveTo(x, yTop)
@@ -427,11 +416,10 @@ export function drawBlock3D(ctx, x, y, w, hue, h = 26, squash = 0) {
   ctx.lineTo(x + w, yTop)
   ctx.closePath()
   ctx.fill()
-  ctx.strokeStyle = 'rgba(0,0,0,0.18)'
+  ctx.strokeStyle = 'rgba(0,0,0,0.2)'
   ctx.lineWidth = 1
   ctx.stroke()
 
-  // right side face
   ctx.fillStyle = side
   ctx.beginPath()
   ctx.moveTo(x + w, yTop)
@@ -441,62 +429,22 @@ export function drawBlock3D(ctx, x, y, w, hue, h = 26, squash = 0) {
   ctx.closePath()
   ctx.fill()
 
-  // front face
   ctx.fillStyle = front
   ctx.fillRect(x, yTop, w, hh)
-  ctx.fillStyle = 'rgba(255,255,255,0.28)'
+  ctx.fillStyle = 'rgba(255,255,255,0.34)'
   ctx.fillRect(x, yTop, w, 3.5)
-  ctx.fillStyle = 'rgba(0,0,0,0.12)'
+  ctx.fillStyle = 'rgba(0,0,0,0.14)'
   ctx.fillRect(x, yTop + hh - 4, w, 4)
-  ctx.strokeStyle = 'rgba(0,0,0,0.22)'
+  ctx.strokeStyle = 'rgba(0,0,0,0.24)'
   ctx.lineWidth = 1
   ctx.strokeRect(x + 0.5, yTop + 0.5, w - 1, hh - 1)
 }
 
-/** Mini dartboard with a dart in the bullseye (NimBullseye card thumbnail). */
-export function drawBoardPreview(ctx, w, h, dartSkin) {
-  ctx.clearRect(0, 0, w, h)
-  const cx = w / 2
-  const cy = h / 2 - 2
-  const R = 28
-  // wooden frame
-  const wood = ctx.createLinearGradient(cx - R, cy - R, cx + R, cy + R)
-  wood.addColorStop(0, '#b06a2c')
-  wood.addColorStop(1, '#6e3f16')
-  ctx.fillStyle = wood
-  ctx.beginPath()
-  ctx.arc(cx, cy, R + 4, 0, Math.PI * 2)
-  ctx.fill()
-  const mini = [
-    { r: 28, c: '#2f3542' },
-    { r: 23, c: '#ef476f' },
-    { r: 17.5, c: '#06d6a0' },
-    { r: 12, c: '#ef476f' },
-    { r: 6.5, c: '#06d6a0' },
-    { r: 3, c: '#ffd60a' },
-  ]
-  for (const r of mini) {
-    ctx.fillStyle = r.c
-    ctx.beginPath()
-    ctx.arc(cx, cy, r.r, 0, Math.PI * 2)
-    ctx.fill()
-  }
-  // dome highlight
-  ctx.fillStyle = 'rgba(255,255,255,0.16)'
-  ctx.beginPath()
-  ctx.arc(cx - 7, cy - 9, R * 0.72, 0, Math.PI * 2)
-  ctx.fill()
-  // dart pinned in the bullseye (tip at center)
-  if (dartSkin) drawDart(ctx, cx, cy + 24 * 0.55, 0, dartSkin, 0.55)
-}
-
-/** Angry mustachioed fly with red sunglasses. */
 export function drawFly(ctx, x, y, s, t, angry = false) {
   ctx.save()
   ctx.translate(x, y)
-  // buzzing wings
   const flap = Math.sin(t * 45) * 0.5
-  ctx.fillStyle = 'rgba(225,238,255,0.8)'
+  ctx.fillStyle = 'rgba(224, 242, 254, 0.85)'
   for (const d of [-1, 1]) {
     ctx.save()
     ctx.translate(d * 4 * s, -3 * s)
@@ -506,27 +454,24 @@ export function drawFly(ctx, x, y, s, t, angry = false) {
     ctx.fill()
     ctx.restore()
   }
-  // body
   const g = ctx.createRadialGradient(-2 * s, -2 * s, 1, 0, 0, 8 * s)
-  g.addColorStop(0, '#4d5f80')
-  g.addColorStop(1, '#222b3d')
+  g.addColorStop(0, '#6d28d9')
+  g.addColorStop(1, '#1e1b4b')
   ctx.fillStyle = g
   ctx.beginPath()
   ctx.arc(0, 0, 7.5 * s, 0, Math.PI * 2)
   ctx.fill()
-  ctx.strokeStyle = 'rgba(0,0,0,0.4)'
+  ctx.strokeStyle = 'rgba(0,0,0,0.45)'
   ctx.lineWidth = 1.2 * s
   ctx.stroke()
-  // red sunglasses
-  ctx.fillStyle = '#e63946'
+  ctx.fillStyle = '#f43f5e'
   rr(ctx, -6.2 * s, -3.4 * s, 5.4 * s, 3.8 * s, 1.4 * s)
   ctx.fill()
   rr(ctx, 0.8 * s, -3.4 * s, 5.4 * s, 3.8 * s, 1.4 * s)
   ctx.fill()
   ctx.fillRect(-1.4 * s, -2.4 * s, 2.8 * s, 1.1 * s)
-  // absurd mustache
   ctx.strokeStyle = '#10131a'
-  ctx.lineWidth = 1.2 * s
+  ctx.lineWidth = 1.3 * s
   ctx.lineCap = 'round'
   ctx.beginPath()
   ctx.moveTo(-4 * s, 2.6 * s)
@@ -534,9 +479,8 @@ export function drawFly(ctx, x, y, s, t, angry = false) {
   ctx.moveTo(4 * s, 2.6 * s)
   ctx.quadraticCurveTo(6.6 * s, 1.6 * s, 8.2 * s, 3 * s)
   ctx.stroke()
-  // angry brows
   if (angry) {
-    ctx.strokeStyle = '#10131a'
+    ctx.strokeStyle = '#fbbf24'
     ctx.lineWidth = 1.5 * s
     ctx.beginPath()
     ctx.moveTo(-6.4 * s, -6.4 * s)
@@ -548,32 +492,26 @@ export function drawFly(ctx, x, y, s, t, angry = false) {
   ctx.restore()
 }
 
-/** Cartoon fly swatter. Origin at the mesh center. */
 export function drawSwatter(ctx, x, y, s, angle = -0.5) {
   ctx.save()
   ctx.translate(x, y)
   ctx.rotate(angle)
   ctx.scale(s, s)
-  // handle
-  ctx.strokeStyle = '#c98a4b'
+  ctx.strokeStyle = '#836ef9'
   ctx.lineWidth = 5
   ctx.lineCap = 'round'
   ctx.beginPath()
   ctx.moveTo(4, 16)
   ctx.lineTo(16, 38)
   ctx.stroke()
-  ctx.strokeStyle = 'rgba(0,0,0,0.25)'
-  ctx.lineWidth = 1.4
-  ctx.stroke()
-  // mesh
-  ctx.fillStyle = '#ef476f'
+  ctx.fillStyle = '#ec4899'
   rr(ctx, -26, -28, 52, 46, 11)
   ctx.fill()
   ctx.strokeStyle = 'rgba(0,0,0,0.35)'
   ctx.lineWidth = 2.5
   rr(ctx, -26, -28, 52, 46, 11)
   ctx.stroke()
-  ctx.strokeStyle = 'rgba(255,255,255,0.55)'
+  ctx.strokeStyle = 'rgba(255,255,255,0.65)'
   ctx.lineWidth = 1.2
   for (let i = 0; i < 4; i++) {
     ctx.beginPath()
@@ -590,264 +528,6 @@ export function drawSwatter(ctx, x, y, s, angle = -0.5) {
   ctx.restore()
 }
 
-/** Pseudo-3D road with a cow and the player chicken (NimRush thumbnail). */
-export function drawRushPreview(ctx, w, h, skin) {
-  ctx.clearRect(0, 0, w, h)
-  const hy = h * 0.4
-  // road
-  ctx.fillStyle = '#6d7686'
-  ctx.beginPath()
-  ctx.moveTo(w * 0.5 - 6, hy)
-  ctx.lineTo(w * 0.5 + 6, hy)
-  ctx.lineTo(w - 8, h)
-  ctx.lineTo(8, h)
-  ctx.closePath()
-  ctx.fill()
-  // lane lines
-  ctx.strokeStyle = 'rgba(255,255,255,0.75)'
-  ctx.lineWidth = 2
-  ctx.setLineDash([5, 5])
-  for (const off of [-1, 1]) {
-    ctx.beginPath()
-    ctx.moveTo(w / 2 + off * 4, hy + 2)
-    ctx.lineTo(w / 2 + off * (w * 0.3), h)
-    ctx.stroke()
-  }
-  ctx.setLineDash([])
-  // little cow ahead
-  ctx.fillStyle = '#fff'
-  ctx.beginPath()
-  ctx.ellipse(w / 2 + 13, hy + 9, 9, 6, 0, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.fillStyle = '#222'
-  ctx.beginPath()
-  ctx.arc(w / 2 + 10, hy + 7, 2.4, 0, Math.PI * 2)
-  ctx.fill()
-  // player chicken
-  drawChicken(ctx, w / 2 - 12, h - 18, 0.85, skin, 0.6, 0.8)
-}
-
-/** Cartoon sausage with a surprised face (no shadow). `rot` = rotation in radians. */
-export function drawSausage(ctx, x, y, s, rot = 0) {
-  ctx.save()
-  ctx.translate(x, y)
-  ctx.rotate(rot)
-  ctx.scale(s, s)
-  ctx.fillStyle = '#c1613b'
-  rr(ctx, -22, -9, 44, 18, 9)
-  ctx.fill()
-  ctx.strokeStyle = 'rgba(0,0,0,0.3)'
-  ctx.lineWidth = 1.6
-  rr(ctx, -22, -9, 44, 18, 9)
-  ctx.stroke()
-  ctx.strokeStyle = 'rgba(90,35,10,0.5)'
-  ctx.lineWidth = 1.8
-  ctx.beginPath()
-  ctx.moveTo(-14, -6)
-  ctx.lineTo(-17, 6)
-  ctx.moveTo(14, -6)
-  ctx.lineTo(17, 6)
-  ctx.stroke()
-  ctx.fillStyle = 'rgba(255,255,255,0.3)'
-  rr(ctx, -17, -6.5, 34, 4, 2)
-  ctx.fill()
-  // absurd surprised face
-  ctx.fillStyle = '#fff'
-  ctx.beginPath()
-  ctx.arc(-5, -1, 2.8, 0, Math.PI * 2)
-  ctx.arc(5, -1, 2.8, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.fillStyle = '#222'
-  ctx.beginPath()
-  ctx.arc(-5, -1, 1.2, 0, Math.PI * 2)
-  ctx.arc(5, -1, 1.2, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.strokeStyle = '#222'
-  ctx.lineWidth = 1.3
-  ctx.beginPath()
-  ctx.arc(0, 3.5, 2, 0, Math.PI * 2)
-  ctx.stroke()
-  ctx.restore()
-}
-
-/** Flying sausages + slice trail + knife (NimSlice card thumbnail). */
-export function drawSlicePreview(ctx, w, h, skin) {
-  ctx.clearRect(0, 0, w, h)
-  // warm kitchen wall
-  const wall = ctx.createLinearGradient(0, 0, 0, h)
-  wall.addColorStop(0, '#fff6e0')
-  wall.addColorStop(1, '#ffd9a0')
-  ctx.fillStyle = wall
-  ctx.fillRect(0, 0, w, h)
-  // counter
-  ctx.fillStyle = '#c98a4b'
-  ctx.fillRect(0, h - 10, w, 10)
-  ctx.fillStyle = '#e8b877'
-  ctx.fillRect(0, h - 10, w, 2.5)
-  // flying sausage (mid-air, tilted)
-  ctx.save()
-  ctx.translate(w * 0.34, h * 0.42)
-  ctx.rotate(-0.5)
-  ctx.translate(-w * 0.34, -h * 0.42)
-  drawSausage(ctx, w * 0.34, h * 0.42, 0.8)
-  ctx.restore()
-  // second sausage, upper right
-  ctx.save()
-  ctx.translate(w * 0.72, h * 0.22)
-  ctx.rotate(0.6)
-  ctx.translate(-w * 0.72, -h * 0.22)
-  drawSausage(ctx, w * 0.72, h * 0.22, 0.62)
-  ctx.restore()
-  // sliced halves near the bottom
-  ctx.fillStyle = '#c1613b'
-  ctx.beginPath()
-  ctx.ellipse(w * 0.52, h * 0.72, 9, 6, 0.3, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.beginPath()
-  ctx.ellipse(w * 0.63, h * 0.78, 9, 6, -0.2, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.fillStyle = '#f3e0c2'
-  ctx.beginPath()
-  ctx.ellipse(w * 0.56, h * 0.74, 2.2, 5, 0.3, 0, Math.PI * 2)
-  ctx.fill()
-  // the black bomb (don't slice!)
-  ctx.save()
-  ctx.translate(w * 0.8, h * 0.62)
-  ctx.rotate(0.35)
-  ctx.scale(0.6, 0.6)
-  ctx.translate(-w * 0.8, -h * 0.62)
-  ctx.translate(w * 0.8, h * 0.62)
-  ctx.fillStyle = '#343a4d'
-  rr(ctx, -22, -9, 44, 18, 9)
-  ctx.fill()
-  ctx.strokeStyle = 'rgba(0,0,0,0.45)'
-  ctx.lineWidth = 1.6
-  rr(ctx, -22, -9, 44, 18, 9)
-  ctx.stroke()
-  ctx.fillStyle = '#e63946'
-  ctx.beginPath()
-  ctx.arc(-4, 0, 2.4, 0, Math.PI * 2)
-  ctx.arc(5, 0, 2.4, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.strokeStyle = '#8d6e4a'
-  ctx.lineWidth = 2
-  ctx.beginPath()
-  ctx.moveTo(0, -9)
-  ctx.quadraticCurveTo(2, -14, 6, -16)
-  ctx.stroke()
-  ctx.fillStyle = '#ffd60a'
-  ctx.beginPath()
-  ctx.arc(7, -17, 2.6, 0, Math.PI * 2)
-  ctx.fill()
-  ctx.restore()
-  // big slice trail with knife at the tip
-  ctx.lineCap = 'round'
-  ctx.strokeStyle = 'rgba(239,71,111,0.45)'
-  ctx.lineWidth = 11
-  ctx.beginPath()
-  ctx.moveTo(w * 0.1, h * 0.92)
-  ctx.quadraticCurveTo(w * 0.3, h * 0.62, w * 0.46, h * 0.5)
-  ctx.stroke()
-  ctx.strokeStyle = '#fff7e0'
-  ctx.lineWidth = 7
-  ctx.beginPath()
-  ctx.moveTo(w * 0.1, h * 0.92)
-  ctx.quadraticCurveTo(w * 0.3, h * 0.62, w * 0.46, h * 0.5)
-  ctx.stroke()
-  // knife at the trail tip
-  ctx.save()
-  ctx.translate(w * 0.46, h * 0.5)
-  ctx.rotate(-0.62)
-  const g = ctx.createLinearGradient(0, -5, 0, 5)
-  g.addColorStop(0, '#ffffff')
-  g.addColorStop(1, '#b9c6d4')
-  ctx.fillStyle = g
-  ctx.beginPath()
-  ctx.moveTo(0, -5)
-  ctx.lineTo(24, -3)
-  ctx.lineTo(30, 0)
-  ctx.lineTo(24, 3)
-  ctx.lineTo(0, 5)
-  ctx.closePath()
-  ctx.fill()
-  ctx.strokeStyle = 'rgba(0,0,0,0.3)'
-  ctx.lineWidth = 1.2
-  ctx.stroke()
-  ctx.fillStyle = '#8d5524'
-  rr(ctx, -13, -3.2, 13, 6.4, 3)
-  ctx.fill()
-  ctx.restore()
-  // chef chick
-  drawChicken(ctx, w * 0.16, h * 0.84, 0.62, skin, 0.6, 2, 0.05)
-}
-
-/** Grass field + block + fly + Luna coin + running chick (NimDash thumbnail). */
-export function drawDashPreview(ctx, w, h, skin) {
-  ctx.clearRect(0, 0, w, h)
-  // sky
-  const sky = ctx.createLinearGradient(0, 0, 0, h)
-  sky.addColorStop(0, '#6ec6f0')
-  sky.addColorStop(1, '#e8f7ff')
-  ctx.fillStyle = sky
-  ctx.fillRect(0, 0, w, h)
-  drawSun(ctx, w * 0.82, h * 0.14, 8)
-  drawCloud(ctx, w * 0.22, h * 0.2, 0.42)
-  // far skyline
-  ctx.fillStyle = 'rgba(120,150,175,0.5)'
-  ctx.fillRect(0, h * 0.5, 18, h * 0.5)
-  ctx.fillRect(w * 0.62, h * 0.58, 16, h * 0.42)
-  // ground
-  const gy = h * 0.78
-  ctx.fillStyle = '#7c4a21'
-  ctx.fillRect(0, gy, w, h - gy)
-  ctx.fillStyle = '#4caf50'
-  ctx.fillRect(0, gy, w, 5)
-  ctx.fillStyle = 'rgba(255,255,255,0.3)'
-  ctx.fillRect(0, gy, w, 1.6)
-  // block obstacle
-  ctx.fillStyle = '#d99a2b'
-  rr(ctx, w * 0.66, gy - 20, 18, 20, 3)
-  ctx.fill()
-  ctx.strokeStyle = 'rgba(120,70,10,0.55)'
-  ctx.lineWidth = 1.4
-  rr(ctx, w * 0.66 + 1.5, gy - 20 + 1.5, 15, 17, 2)
-  ctx.stroke()
-  // mustachioed fly
-  drawFly(ctx, w * 0.45, h * 0.56, 0.9, 1.2, false)
-  // Luna coins (arc)
-  for (let i = 0; i < 3; i++) {
-    const cx = w * 0.24 + i * 11
-    const cy = h * 0.5 - Math.sin((i / 2) * Math.PI) * 8
-    ctx.fillStyle = '#fde68a'
-    ctx.beginPath()
-    ctx.arc(cx, cy, 5, 0, Math.PI * 2)
-    ctx.fill()
-    ctx.strokeStyle = '#d97706'
-    ctx.lineWidth = 1.2
-    ctx.stroke()
-  }
-  // running/mid-jump chick
-  drawChicken(ctx, w * 0.18, h * 0.68, 0.68, skin, 0.8, 3, -0.18)
-}
-
-/** Fly + swatter + BONK (NimSwat thumbnail). */
-export function drawSwatPreview(ctx, w, h) {
-  ctx.clearRect(0, 0, w, h)
-  ctx.fillStyle = 'rgba(255,183,77,0.3)'
-  ctx.fillRect(0, h * 0.62, w, h * 0.38)
-  drawFly(ctx, w * 0.64, h * 0.3, 1.15, 0.6)
-  drawSwatter(ctx, w * 0.36, h * 0.6, 0.8)
-  ctx.font = '800 14px system-ui, sans-serif'
-  ctx.textAlign = 'center'
-  ctx.lineWidth = 3.5
-  ctx.lineJoin = 'round'
-  ctx.strokeStyle = 'rgba(255,255,255,0.9)'
-  ctx.strokeText('BONK!', w * 0.62, h * 0.6)
-  ctx.fillStyle = '#ffd60a'
-  ctx.fillText('BONK!', w * 0.62, h * 0.6)
-}
-
-/** Small stack of blocks (card / skin thumbnail). */
 export function drawStackPreview(ctx, hue, w, h) {
   ctx.clearRect(0, 0, w, h)
   const baseY = h - 8
@@ -857,16 +537,14 @@ export function drawStackPreview(ctx, hue, w, h) {
     { x: (w - 28) / 2 + 3, w: 28 },
   ]
   blocks.forEach((b, i) => {
-    drawBlock3D(ctx, b.x, baseY - (i + 1) * 12, b.w, hue + i * 5, 12, 0)
+    drawBlock3D(ctx, b.x, baseY - (i + 1) * 12, b.w, hue + i * 7, 12, 0)
   })
-  // floating block above (the new drop mechanic)
-  drawBlock3D(ctx, (w - 24) / 2 + 12, baseY - 4 * 12 - 6, 24, hue + 20, 12, 0)
+  drawBlock3D(ctx, (w - 24) / 2 + 12, baseY - 4 * 12 - 6, 24, hue + 24, 12, 0)
 }
 
-/** Cute sun with a face. */
 export function drawSun(ctx, x, y, r) {
   ctx.save()
-  ctx.strokeStyle = '#ffc300'
+  ctx.strokeStyle = '#fbbf24'
   ctx.lineWidth = r * 0.22
   ctx.lineCap = 'round'
   for (let i = 0; i < 8; i++) {
@@ -877,14 +555,13 @@ export function drawSun(ctx, x, y, r) {
     ctx.stroke()
   }
   const g = ctx.createRadialGradient(x - r * 0.3, y - r * 0.3, r * 0.2, x, y, r)
-  g.addColorStop(0, '#ffe97a')
-  g.addColorStop(1, '#ffcc33')
+  g.addColorStop(0, '#fef08a')
+  g.addColorStop(1, '#f59e0b')
   ctx.fillStyle = g
   ctx.beginPath()
   ctx.arc(x, y, r, 0, Math.PI * 2)
   ctx.fill()
-  // happy closed eyes + smile
-  ctx.strokeStyle = '#e8940a'
+  ctx.strokeStyle = '#b45309'
   ctx.lineWidth = r * 0.13
   ctx.beginPath()
   ctx.arc(x - r * 0.32, y - r * 0.08, r * 0.18, Math.PI * 1.1, Math.PI * 1.9)
@@ -898,7 +575,6 @@ export function drawSun(ctx, x, y, r) {
   ctx.restore()
 }
 
-/** Fluffy cartoon cloud. */
 export function drawCloud(ctx, x, y, s) {
   ctx.save()
   ctx.fillStyle = '#ffffff'
@@ -907,7 +583,7 @@ export function drawCloud(ctx, x, y, s) {
   ctx.arc(x + 16 * s, y + 3 * s, 11 * s, 0, Math.PI * 2)
   ctx.arc(x - 15 * s, y + 4 * s, 10 * s, 0, Math.PI * 2)
   ctx.fill()
-  ctx.fillStyle = 'rgba(160,210,255,0.5)'
+  ctx.fillStyle = 'rgba(167, 139, 250, 0.38)'
   ctx.beginPath()
   ctx.ellipse(x, y + 9 * s, 22 * s, 5 * s, 0, 0, Math.PI * 2)
   ctx.fill()

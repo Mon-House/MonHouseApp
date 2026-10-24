@@ -1,7 +1,7 @@
 /**
- * POST /api/cup/payout — record an on-chain payout for a Cup winner.
- * The NimHouse wallet sends the NIM first, then this marks the tx hash so the
- * UI can show "paid ✓". Protected by the CUP_ADMIN_SECRET header.
+ * POST /api/cup/payout — record an on-chain Monad Testnet payout for a Cup winner.
+ * The MonHouse wallet sends MON first, then this marks the tx hash so the
+ * UI can show "paid ✓" with a Monadscan link. Protected by CUP_ADMIN_SECRET.
  *
  * Body: { game, period, rank (1|2|3), tx }
  */
@@ -28,8 +28,9 @@ export default async function handler(req, res) {
     if (!tx) return res.status(400).json({ ok: false, error: 'missing tx hash' })
 
     await writeCup((data) => {
+      data.payouts = data.payouts || {}
       const byGame = (data.payouts[game] = data.payouts[game] || {})
-      const byPeriod = byGame[period] || (byGame[period] = {})
+      const byPeriod = (byGame[period] = byGame[period] || {})
       byPeriod[String(rank)] = String(tx).slice(0, 128)
       return data
     })

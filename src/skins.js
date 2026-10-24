@@ -1,58 +1,85 @@
 /**
- * Cosmetic-only skins. Prices are in Luna (1 NIM = 100,000 Luna).
- * Skins never affect gameplay — that is a hard rule of NimHouse.
+ * Cosmetic-only skins for MonHouse on Monad Testnet.
+ * Prices are in internal MON units (100,000 units = 1 MON, so 1,000 = 0.01 MON).
+ * Skins never affect gameplay — that is a hard rule of MonHouse.
  */
 
-export const CHICK_SKINS = [
+export const CAT_SKINS = [
   {
     id: 'classic',
-    name: 'Absurd Chick',
+    name: 'Absurd Chonker',
     price: 0,
-    colors: { body: '#fff3d6', wing: '#ffd9a0', comb: '#e63946', beak: '#ff9f1c', mustache: '#5b3a1e' },
+    colors: {
+      body: '#ffa424',
+      wing: '#ff8c12',
+      ears: '#ff6b9d',
+      nose: '#ff5c8a',
+      mustache: '#5b2a0e',
+    },
   },
   {
-    id: 'nimiq',
-    name: 'Nimiq Green',
-    price: 1000,
-    colors: { body: '#d9ffe8', wing: '#5fd48a', comb: '#e63946', beak: '#ff9f1c', mustache: '#20603f' },
+    id: 'monad',
+    name: 'Monad Violet',
+    price: 1000, // 0.01 MON
+    colors: {
+      body: '#a78bfa',
+      wing: '#836ef9',
+      ears: '#f472b6',
+      nose: '#f472b6',
+      mustache: '#2e1065',
+    },
   },
   {
     id: 'gold',
-    name: 'Gold Fluff',
-    price: 5000,
-    accessory: 'crown',
-    colors: { body: '#ffe9a3', wing: '#f5c542', comb: '#d1495b', beak: '#ffb703', mustache: '#8a6d1d' },
+    name: 'Royal Meow',
+    price: 5000, // 0.05 MON
+    // (our hero already wears his royal crown — no extra accessory needed!)
+    colors: {
+      body: '#fde047',
+      wing: '#facc15',
+      ears: '#fb7185',
+      nose: '#f43f5e',
+      mustache: '#78350f',
+    },
   },
   {
     id: 'space',
-    name: 'Space Chick',
-    price: 10000,
+    name: 'Astro Nyancat',
+    price: 10000, // 0.1 MON
     accessory: 'helmet',
-    colors: { body: '#e6ecff', wing: '#9db4ff', comb: '#e63946', beak: '#ff9f1c', mustache: '#33406e' },
+    colors: {
+      body: '#67e8f9',
+      wing: '#06b6d4',
+      ears: '#c084fc',
+      nose: '#f472b6',
+      mustache: '#164e63',
+    },
   },
   {
     id: 'lava',
-    name: 'Lava Chick',
-    price: 10000,
+    name: 'Neon Magma Cat',
+    price: 10000, // 0.1 MON
     accessory: 'sunglasses',
-    colors: { body: '#ffb08a', wing: '#ff5d3b', comb: '#ffd23f', beak: '#ffd23f', mustache: '#7a2d12' },
+    colors: {
+      body: '#fb7185',
+      wing: '#f43f5e',
+      ears: '#fde047',
+      nose: '#facc15',
+      mustache: '#4c0519',
+    },
   },
 ]
 
-export const DART_SKINS = [
-  { id: 'classic', name: 'House Dart', price: 0, colors: { barrel: '#c0c6cf', flight: '#e63946' } },
-  { id: 'nim', name: 'NIM Dart', price: 1000, colors: { barrel: '#5fd48a', flight: '#0e5c34' } },
-  { id: 'fire', name: 'Inferno Dart', price: 5000, colors: { barrel: '#ffb703', flight: '#d1495b' } },
-]
+// Backwards-compatible alias so any import of CHICK_SKINS works seamlessly
+export const CHICK_SKINS = CAT_SKINS
 
 export const STACK_SKINS = [
-  { id: 'mint', name: 'Mint Blocks', price: 0, hue: 158 },
-  { id: 'sunset', name: 'Sunset Blocks', price: 1000, hue: 16 },
-  { id: 'ocean', name: 'Ocean Blocks', price: 5000, hue: 205 },
+  { id: 'mint', name: 'Monad Violet Blocks', price: 0, hue: 264 },
+  { id: 'sunset', name: 'Neon Mint Blocks', price: 1000, hue: 158 },
+  { id: 'ocean', name: 'Solar Flare Blocks', price: 1000 * 5, hue: 18 },
 ]
 
 export const SKIN_GROUPS = [
-  { id: 'chick', label: 'NimChick outfits', skins: CHICK_SKINS },
-  { id: 'dart', label: 'NimBullseye darts', skins: DART_SKINS },
-  { id: 'stack', label: 'NimStack blocks', skins: STACK_SKINS },
+  { id: 'chick', label: 'MonCat outfits', skins: CAT_SKINS },
+  { id: 'stack', label: 'MonStack blocks', skins: STACK_SKINS },
 ]

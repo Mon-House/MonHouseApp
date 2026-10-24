@@ -1,42 +1,61 @@
 /**
- * Wallet signature verification for NimHouse.
+ * EVM (Monad Testnet) Wallet Signature Verification for MonHouse.
  *
- * Primary scheme: the official Nimiq Keyguard "sign message" digest
- * (see nimiq.github.io/hub/api-reference/sign-message):
- *   sign( sha256( "\x16Nimiq Signed Message:\n" + String(message.length) + message ) )
- * Raw-message and keccak256 variants are also accepted for robustness.
- * 0x prefixes are normalized on both sides.
+ * Primary scheme: EIP-191 personal_sign (secp256k1 recoverable ECDSA):
+ *   keccak256("\x19Ethereum Signed Message:\n" + byteLength(message) + message)
+ * Recovers the 20-byte 0x... EVM address and compares case-insensitively
+ * against the claimed signer address (`address` or `publicKey`).
  */
-import crypto from 'node:crypto'
+import { secp256k1 } from '@noble/curves/secp256k1.js'
 import { keccak256 } from 'js-sha3'
 
-/** Nimiq Keyguard message digest: sha256 of the prefixed message. */
-export function nimiqMessageDigest(message) {
-  const prefixed = Buffer.concat([
-    Buffer.from([0x16]),
-    Buffer.from(`Nimiq Signed Message:\n${String(message.length)}${message}`, 'utf8'),
-  ])
-  return crypto.createHash('sha256').update(prefixed).digest()
+/** Compute EIP-191 personal_sign digest (32-byte Uint8Array). */
+export function evmMessageDigest(message) {
+  const msgBytes = Buffer.from(String(message ?? ''), 'utf8')
+  const prefix = Buffer.from(`\x19Ethereum Signed Message:\n${msgBytes.length}`, 'utf8')
+  const payload = Buffer.concat([prefix, msgBytes])
+  return Uint8Array.from(Buffer.from(keccak256.arrayBuffer(payload)))
+}
+
+/** Recover lowercase 0x-prefixed EVM address from message + 65-byte hex signature. */
+export function recoverEvmAddress(message, signature) {
+  const clean = String(signature || '').replace(/^0x/i, '')
+  if (clean.length !== 130) throw new Error(`bad signature length (${clean.length})`)
+  const sigBytes = Buffer.from(clean, 'hex')
+  const r = BigInt('0x' + sigBytes.subarray(0, 32).toString('hex'))
+  const s = BigInt('0x' + sigBytes.subarray(32, 64).toString('hex'))
+  let v = sigBytes[64]
+  if (v >= 27) v -= 27
+  if (v !== 0 && v !== 1) throw new Error(`invalid recovery id v=${sigBytes[64]}`)
+
+  const sig = new secp256k1.Signature(r, s).addRecoveryBit(v)
+  const digest = evmMessageDigest(message)
+  const pubPoint = sig.recoverPublicKey(digest)
+  // Uncompressed public key is 65 bytes: 0x04 || X (32B) || Y (32B)
+  const uncompressed = pubPoint.toBytes(false).slice(1)
+  const addrHash = Buffer.from(keccak256.arrayBuffer(uncompressed))
+  return '0x' + addrHash.subarray(12).toString('hex').toLowerCase()
 }
 
 /**
- * @returns {{ ok: boolean, error: string|null }}
+ * Verify an EVM personal_sign signature against a claimed 0x... address.
+ * @param {string} message
+ * @param {string} addressOrPub  0x-prefixed 20-byte EVM address
+ * @param {string} signature     0x-prefixed 65-byte hex signature
+ * @returns {{ ok: boolean, address: string|null, error: string|null }}
  */
-export function verifyWalletSignature(message, publicKey, signature) {
-  const clean = (h) => String(h || '').replace(/^0x/i, '')
-  const pub = Buffer.from(clean(publicKey), 'hex')
-  const sig = Buffer.from(clean(signature), 'hex')
-  if (pub.length !== 32 || sig.length !== 64)
-    return { ok: false, error: `bad key sizes (pub=${pub.length}, sig=${sig.length})` }
+export function verifyWalletSignature(message, addressOrPub, signature) {
+  const claimed = String(addressOrPub || '').trim().toLowerCase()
+  if (!/^0x[0-9a-f]{40}$/.test(claimed)) {
+    return { ok: false, address: null, error: 'bad EVM wallet address (expected 0x...)' }
+  }
   try {
-    const der = Buffer.concat([Buffer.from('302a300506032b6570032100', 'hex'), pub])
-    const key = crypto.createPublicKey({ key: der, format: 'der', type: 'spki' })
-    const ok =
-      crypto.verify(null, nimiqMessageDigest(message), key, sig) ||
-      crypto.verify(null, Buffer.from(keccak256(message)), key, sig) ||
-      crypto.verify(null, Buffer.from(message, 'utf8'), key, sig)
-    return { ok, error: ok ? null : 'signature invalid' }
-  } catch {
-    return { ok: false, error: 'signature invalid' }
+    const recovered = recoverEvmAddress(message, signature)
+    if (recovered !== claimed) {
+      return { ok: false, address: recovered, error: 'signature does not match wallet address' }
+    }
+    return { ok: true, address: recovered, error: null }
+  } catch (e) {
+    return { ok: false, address: null, error: e?.message || 'signature invalid' }
   }
 }

@@ -1,8 +1,8 @@
 {
-  "name": "nimhouse",
+  "name": "monhouse",
   "private": true,
-  "version": "1.0.0",
-  "description": "NimHouse — a skill-based mini game house inside Nimiq Pay. Nimiq Mini Apps Competition, Cycle II.",
+  "version": "2.0.0",
+  "description": "MonHouse — 5 absurd cat skill-arcade mini-games built on Monad Testnet (Chain ID 10143).",
   "type": "module",
   "engines": {
     "node": ">=18"
@@ -13,7 +13,7 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@nimiq/mini-app-sdk": "^0.1.0",
+    "@noble/curves": "^2.4.0",
     "js-sha3": "^0.13.0",
     "react": "^18.3.1",
     "react-dom": "^18.3.1"

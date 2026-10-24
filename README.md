@@ -1,206 +1,33 @@
-# 🐔 NimHouse
+# MonHouse 🐾⚡ — Monad Testnet Absurd Cat Arcade
 
-**Skill-based mini games inside Nimiq Pay.** One house, seven games, real NIM integration — and
-zero gambling. Built for the [Nimiq Mini Apps Competition](https://miniappscompetition.com)
-(Cycle II).
+**MonHouse** (migrated & rebranded from NimHouse) is a colorful, sharp arcade hub featuring **5 skill-based mini-games** starring absurd chonky cats on **Monad Testnet**.
 
-| Game | Loop | Skill |
-| --- | --- | --- |
-| **NimChick** | Flappy-Bird-style flapper starring an absurd mustached chicken | flap timing |
-| **NimStack** | Blocks float overhead; drop them onto the shrinking tower | timing & precision |
-| **NimBullseye** | Dart throwing: ride the swaying crosshair, green band = PERFECT ×2 | feel & judgment |
-| **NimRush** | Pseudo-3D chicken runner — weave through cows, UFOs, giant sausages | reflexes |
-| **NimSwat** | One angry mustachioed fly; tap it before it gets too fast (5 misses = escape) | moving-target accuracy |
-| **NimSlice** | Sausage volleys fly up the screen — swipe to slice them all (3 escapes = over) | swipe timing |
-| **NimDash** | Side-scrolling platformer — sprint, jump & mid-air flap over blocks, pits & mustachioed flies; stomp for +50, grab Luna coins | jump timing, air-flap control & stomping |
+## Monad Testnet Configuration
+- **Network Name:** `Monad Testnet`
+- **Chain ID:** `10143` (`0x279f`)
+- **Native Token:** `MON` (18 decimals)
+- **Primary RPC:** `https://testnet-rpc.monad.xyz`
+- **Explorer:** `https://testnet.monadscan.com`
+- **Faucet:** `https://faucet.monad.xyz`
 
-## Why NimHouse
+## 5 Mini-Games
+1. **MonCat** — Tap or press `Space` to pounce your absurd cat through crystal Monad pipes.
+2. **MonStack** — Drop high floating 3D glowing blocks with overhang slicing & perfect combo streaks.
+3. **MonRush** — 3D highway runner: weave past cows, UFOs, rival cats, and giant sausages.
+4. **MonSwat** — Cozy room swatter: bonk the weaving angry fly before 5 misses let it escape.
+5. **MonDash** — Mario-style side-scrolling platformer: leap blocks & pits, stomp flies (`+50`), and grab `MON` coins.
 
-- **100% player skill.** No entry fees, no betting, no chance-based outcomes. Every score is earned.
-- **Cosmetic-only NIM shop.** Buy chicken outfits, darts, and block themes with real NIM payments
-  through Nimiq Pay. Skins *never* affect gameplay.
-- **Wallet-verified scores.** Verify any run by signing a tamper-proof record with your Nimiq wallet
-  — the run earns a ✓ badge on the leaderboard.
-- **Cheer the house.** Tip with a NIM payment that carries your message on-chain. Every cheer
-  lands on a public cheer board (top cheers + latest words with their on-chain tx hash), backed by
-  the open, inspectable ledger `data/cheers.json` in this repo — transparency by design.
-- **NimHouse Cup.** Every 3 days, per game, the NimHouse wallet stakes 300 NIM (mainnet). Top 3
-  wallet-verified scores take 50 / 30 / 20 % of that cup's pool (150 / 90 / 60 NIM), paid on-chain
-  at the end of the cup — 2,100 NIM per cup across the 7 games.
-  Free to enter — one entry per device per game per cup, best score counts.
-- **Demo mode.** Running outside Nimiq Pay (browser, CI) transparently simulates wallet actions so
-  the app is always fully testable. Inside Nimiq Pay everything is real.
+## Configuring Your House Wallet
+Copy `.env.example` to `.env` (or set Environment Variables in Vercel):
 
-## Nimiq Pay integration (framework APIs used)
-
-| Feature | API |
-| --- | --- |
-| Wallet connect, address | `nimiq.listAccounts()` |
-| Live network status | `nimiq.isConsensusEstablished()`, `nimiq.getBlockNumber()` |
-| Skin purchases, cheers | `nimiq.sendBasicTransactionWithData()` (NIM, Luna, note on-chain) |
-| Score verification | `nimiq.sign()` (message signing) |
-| Cup entries | `nimiq.sign()` → server verifies the ed25519 signature, then stores the entry |
-| Leaderboard device id | `requestDeviceIdentifier()` from `@nimiq/mini-app-sdk` |
-
-Built with the official stack from the [mini app tutorial](https://nimiq.dev/mini-apps/tutorials/mini-app-tutorial):
-Vite + React + `@nimiq/mini-app-sdk`. One extra runtime dependency, `js-sha3` (keccak256, used by
-the Cup API to match how Nimiq wallets hash signed messages).
-
-## NimHouse Cup (prize pool)
-
-A free-to-enter, skill-only cup runs on a **5-day cycle** (from cup P6911 — house budget
-schedule; earlier cups ran 2–3 days), independently per game.
-
-- **Stake.** At the start of every cup the NimHouse wallet stakes `300 NIM` (mainnet) per game —
-  `2,100 NIM` total per cup across the 7 games.
-  Special cup **P6910** (house funding schedule): extended window 28 Sept 16:00 UTC →
-  **5 Oct 23:59 WIB (16:59 UTC)**, stake raised to `500 NIM` per game — `3,500 NIM` total,
-  top 3 take 250 / 150 / 100 NIM per game.
-- **Entry.** Finish any game → **Enter the NimHouse Cup**. The app signs a tamper-proof message
-  (`game | period | score | device`) with your Nimiq wallet. The server re-verifies the ed25519
-  signature before accepting the entry — a score you didn't sign with your own key is rejected.
-- **Fairness.** One entry per device per game per cup (replays are free; the best score counts). No
-  entry fee, no randomness, no betting.
-- **Payout.** At the end of each cup the **top 3** take **50 / 30 / 20 %** of that cup's pool
-  (150 / 90 / 60 NIM per game), paid
-  on-chain from the NimHouse wallet. Winners and payout tx hashes are public.
-- **Transparency.** Pool, entries, and payouts are stored in the open repo at
-  [`data/cup.json`](data/cup.json). Anyone can audit every entry and payment.
-  The house may pause between cups (`pool.paused` in the ledger): while paused,
-  new cup entries are rejected server-side and the hub shows a PAUSED label.
-- **Leaderboards never go dark.** Every game shows its top-5 board on the round-over screen, and
-  the hub keeps the full board — prize or no prize. While the cup is paused the entry button turns
-  into *View the leaderboard*, and `GET /api/cup` returns the last cup that has entries
-  (`board.period`, `board.isLast`) with its payout hashes, so the standings of the final cup stay
-  public instead of seven empty rows. Scores keep counting; only the pool is off.
-
-### Cup API (Vercel serverless functions)
-
-| Endpoint | Purpose |
-| --- | --- |
-| `GET /api/cup` | Current period, pool, top-3 per game, recorded payouts |
-| `POST /api/cup/submit` | Verify signature + record/upgrade an entry |
-| `POST /api/cup/payout` | Record a payout tx (admin-gated) |
-
-The functions read/write `data/cup.json` in this repo via the GitHub Contents API. Configure in
-Vercel (never commit these):
-
-```
-CUP_GITHUB_TOKEN     fine-grained PAT with Contents: read/write on this repo
-CUP_GITHUB_REPO      <owner>/<repo>   (e.g. sasam44/nimhouse)
-CUP_ADMIN_SECRET     random secret guarding /api/cup/payout (sent as x-cup-admin)
+```env
+VITE_HOUSE_ADDRESS=0xe5b41b1e42580ddb14F277578D5f92Fc091DAD1d
+VITE_CHEER_ADDRESS=0xe5b41b1e42580ddb14F277578D5f92Fc091DAD1d
+VITE_MONAD_RPC=https://testnet-rpc.monad.xyz
 ```
 
-`data/cup.json` is seeded with a `PENDING` wallet; the Cup card auto-enables once the wallet is set.
-
-### Running payouts
-
-After a cup closes, pay the winners from the NimHouse wallet and record the tx hashes with the
-bundled runner (reads the public `data/cup.json`, no GitHub token needed; the admin secret comes
-from `.env.cup-admin`):
-
-```bash
-node scripts/payout.mjs --dry-run   # preview the payout table
-node scripts/payout.mjs             # interactive: paste each tx hash (or s to skip)
-```
-
-### Player names (signed claims)
-
-Names are **claimed, not typed**: the player submits a gamertag in the menu (☰ → Player), the app
-signs `NimHouse Name | name=<name> | device=<device>` with the wallet, and the server verifies it
-before storing it in the public [`data/names.json`](data/names.json).
-
-- The claimed name **is** the player's Cup identity — Cup entries display the claimed name
-  server-side, so a client can't spoof a different one.
-- Changing the name requires a **new wallet signature** (tracked with a `changes` counter).
-- A device's name is **locked to the wallet that first claimed it** — another wallet on the same
-  device is rejected. (Message signing was chosen over a NIM transaction: same security — the key
-  holder approves — at zero fee.)
-
-| Endpoint | Purpose |
-| --- | --- |
-| `GET /api/name?device=…` | Look up a device's claimed name |
-| `POST /api/name/claim` | Verify signature + store/update the claim |
-
-## Quick start
-
+## Local Development
 ```bash
 npm install
-npm run dev -- --host     # Vite dev server, host-enabled for phone access
+npm run dev
 ```
-
-### Load into Nimiq Pay (real device)
-
-1. Phone and dev machine on the **same Wi-Fi**.
-2. Open **Nimiq Pay → Mini Apps** and enter the Network URL in **Custom URL**, e.g. `http://192.168.1.42:5173`.
-3. Optionally switch to **testnet** (menu → long-press settings 10 s) and claim free NIM to test
-   real payment flows with zero real funds. See
-   [Load a Local Mini App](https://nimiq.dev/mini-apps/development/load-local-mini-app).
-
-### Deploy (public URL)
-
-Any static host works (Vercel, Netlify, GitHub Pages):
-
-```bash
-npm run build   # outputs dist/
-```
-
-Then open it from Nimiq Pay with `https://nimpay.app/miniapps/open/<your-domain>`.
-
-**Current production deployment:** [https://nimhouse.vercel.app](https://nimhouse.vercel.app)
-
-### Payout / staking address
-
-`CHEER_ADDRESS` in [`src/wallet.js`](src/wallet.js) is the recipient for skin purchases, cheers, and
-Cup stakes. The live deployment uses the real NimHouse wallet:
-`NQ52UUPVJEM5SBRAY98HS0FPYHCXHUQRH8CJ`.
-
-> **Note:** Vercel serverless functions bake env vars in at deploy time — after changing
-> `CUP_ADMIN_SECRET` (or any `CUP_*` var) run a fresh `deploy --prod` for the running functions to
-> pick up the new values.
-
-## Project structure
-
-```
-api/
-  cup.js                  Cup GET + shared game list + 3-day period math
-  cup/submit.js           verify wallet signature, record/upgrade entry
-  cup/payout.js           admin-gated payout tx recorder
-  name/index.js           GET a device's claimed name
-  name/claim.js           verify signature + store/update a name claim
-  lib/store.js            read/write data/*.json via the GitHub Contents API
-  lib/verify.js           shared ed25519 + Nimiq Keyguard digest verification
-data/
-  cup.json                cup pool + entries + payouts (public, auditable)
-  names.json              signed player-name claims (public, auditable)
-src/
-  App.jsx                 hub: wallet, shop, cheer, leaderboards, routing
-  wallet.js               SDK init + demo-mode fallback, device id, NIM helpers
-  skins.js                cosmetic-only skin catalog (prices in Luna)
-  sketch.js               canvas drawing (chicken, darts, blocks)
-  leaderboard.js          per-device leaderboard (localStorage)
-  sound.js                WebAudio SFX (no assets)
-  games/NimChick.jsx      flapper engine
-  games/NimStack.jsx      drop-stacking engine
-  games/NimBullseye.jsx   dart engine
-  games/NimRush.jsx       pseudo-3D lane-dodge runner
-  games/NimSwat.jsx       moving-target swatter
-  games/NimSlice.jsx      swipe-slicing sausage volley (portrait-friendly)
-  games/NimDash.jsx        side-scrolling platformer (seeded course, stompables, air-flap)
-  assets/chick.png        official NimHouse chick sprite (all games + hub; procedural art remains as fallback)
-  components/ScoreOverlay.jsx  shared round-over + verify flow
-```
-
-## Rules compliance (Nimiq Mini Apps Competition)
-
-- ✅ Built on the **Nimiq Pay Mini Apps Framework** (SDK `init()` + provider APIs)
-- ✅ Integrates **NIM** natively (payments + signing) — scores under Nimiq integration
-- ✅ **No gambling / no games of chance** — all seven games are deterministic skill games; the Cup
-  is a free-to-enter skill prize pool (no entry fee, no chance), which the rules explicitly permit
-- ✅ Fully functional product, no prototype pieces, works on first try
-- ✅ Public repo, **MIT License** (see `LICENSE`), no hardcoded secrets
-- ✅ AI tools used in development (permitted by the competition FAQ)
-
-## License
-
-MIT — see [LICENSE](LICENSE).

@@ -4,6 +4,12 @@ dist
 *.local
 .env
 .env.*
+!.env.example
 npm-debug.log*
 .vercel
 vercel
+
+# local mascot previews & QA screenshots (scratch — not app assets)
+/mascot-*.png
+/preview-*.png
+/qa-*.png

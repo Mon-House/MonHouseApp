@@ -1,4 +1,4 @@
-const KEY = (g) => `nimhouse.lb.${g}`
+const KEY = (g) => `monhouse.lb.${g}`
 
 export function loadLB(game) {
   try {

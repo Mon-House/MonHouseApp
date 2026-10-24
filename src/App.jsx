@@ -1,1239 +1,1073 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
-import { getWallet, getDeviceId, CHEER_ADDRESS, LUNA_PER_NIM, fmtNim, shortHash } from './wallet'
-import { SKIN_GROUPS } from './skins'
-import {
-  drawChicken,
-  drawDart,
-  drawStackPreview,
-} from './sketch'
-import chickUrl from './assets/chick.png'
-import thumbChick from './assets/thumbs/chick.jpg'
-import thumbStack from './assets/thumbs/stack.jpg'
-import thumbBull from './assets/thumbs/bull.jpg'
-import thumbRush from './assets/thumbs/rush.jpg'
-import thumbSwat from './assets/thumbs/swat.jpg'
-import thumbSlice from './assets/thumbs/slice.jpg'
+import { useCallback, useEffect, useRef, useState } from 'react'
+import catHeroImg from './assets/cat.png'
+import thumbCat from './assets/thumbs/cat.jpg'
 import thumbDash from './assets/thumbs/dash.jpg'
-import { loadLB, bestScore, markVerified } from './leaderboard'
-import { sfx } from './sound'
-import NimChick from './games/NimChick'
-import NimStack from './games/NimStack'
-import NimBullseye from './games/NimBullseye'
-import NimRush from './games/NimRush'
-import NimSwat from './games/NimSwat'
-import NimSlice from './games/NimSlice'
-import NimDash from './games/NimDash'
+import thumbRush from './assets/thumbs/rush.jpg'
+import thumbStack from './assets/thumbs/stack.jpg'
+import thumbSwat from './assets/thumbs/swat.jpg'
+import MonCat from './games/MonCat.jsx'
+import MonDash from './games/MonDash.jsx'
+import MonRush from './games/MonRush.jsx'
+import MonStack from './games/MonStack.jsx'
+import MonSwat from './games/MonSwat.jsx'
+import { drawCat, drawStackPreview } from './sketch.js'
+import { SKIN_GROUPS } from './skins.js'
+import { isMuted, setMuted, sfx } from './sound.js'
+import {
+  CHEER_ADDRESS,
+  HOUSE_ADDRESS,
+  MONAD_TESTNET,
+  explorerAddrUrl,
+  explorerTxUrl,
+  fmtMon,
+  initWallet,
+  shortAddr,
+} from './wallet.js'
+
+const STORAGE_KEY = 'monhouse.v1'
+const NAME_RE = /^[A-Za-z0-9][A-Za-z0-9 ._\-]{0,15}$/
+
+const CHEER_AMOUNTS = [1000, 5000, 10000, 25000] // 0.01, 0.05, 0.1, 0.25 MON
+const CHEER_PRESETS = [
+  'gmonad!! ♥ ✦',
+  'GG! Beat my score ★',
+  'Absurd cat FTW ◈',
+  '10,000 TPS arcade vibes ⚡',
+]
+
+function timeAgo(ts) {
+  const s = Math.max(0, Math.floor((Date.now() - ts) / 1000))
+  if (s < 60) return 'just now'
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
+  return `${Math.floor(s / 86400)}d ago`
+}
+
+const PERIOD5_MS = 5 * 86400 * 1000
+const ANCHOR_START = Date.parse('2026-10-05T16:59:00.000Z')
+const ANCHOR_P = 6911
+
+function cupPeriodId() {
+  const t = Date.now()
+  const delta = Math.max(0, t - ANCHOR_START)
+  return `P${ANCHOR_P + Math.floor(delta / PERIOD5_MS)}`
+}
+
+function getDeviceId() {
+  try {
+    let id = localStorage.getItem('monhouse.device')
+    if (!id || !/^[0-9a-f]{64}$/i.test(id)) {
+      const b = new Uint8Array(32)
+      crypto.getRandomValues(b)
+      id = Array.from(b, (x) => x.toString(16).padStart(2, '0')).join('')
+      localStorage.setItem('monhouse.device', id)
+    }
+    return id
+  } catch {
+    return '0'.repeat(64)
+  }
+}
 
 const GAMES = [
   {
     id: 'chick',
-    name: 'NimChick',
-    blurb: 'Flap an absurd mustached chicken through endless pipes. Classic flapper, zero mercy.',
-    how: 'tap to flap',
-    lbLabel: 'Chick',
+    name: 'MonCat',
+    tag: 'Tap to pounce through crystal pipes',
+    accent: '#a855f7',
+    badge: 'FAN FAVORITE',
+    thumb: thumbCat,
+    Component: MonCat,
+    skinGroup: 'chick',
   },
   {
     id: 'stack',
-    name: 'NimStack',
-    blurb: 'Stack blocks with pixel-perfect precision. Every overhang gets sliced off.',
-    how: 'tap to drop',
-    lbLabel: 'Stack',
-  },
-  {
-    id: 'bull',
-    name: 'NimBullseye',
-    blurb: 'Classic dartboard: BULL 50, T & D rings. A chicken crosses the board — land on it and −10.',
-    how: 'tap aim · hold + release',
-    lbLabel: 'Bullseye',
+    name: 'MonStack',
+    tag: 'Drop floating 3D blocks from above · slice overhang',
+    accent: '#22d3ee',
+    badge: 'PRECISION',
+    thumb: thumbStack,
+    Component: MonStack,
+    skinGroup: 'stack',
   },
   {
     id: 'rush',
-    name: 'NimRush',
-    blurb: 'Pseudo-3D road, full speed, zero brakes. Weave through cows, UFOs & giant sausages.',
-    how: 'tap left / right',
-    lbLabel: 'Rush',
+    name: 'MonRush',
+    tag: '3D highway · dodge cows, UFOs & giant sausages',
+    accent: '#34d399',
+    badge: 'REFLEX',
+    thumb: thumbRush,
+    Component: MonRush,
+    skinGroup: 'chick',
   },
   {
     id: 'swat',
-    name: 'NimSwat',
-    blurb: 'One angry fly with a mustache. Tap it before it gets too fast. 5 misses = it escapes.',
-    how: 'tap the fly',
-    lbLabel: 'Swat',
-  },
-  {
-    id: 'slice',
-    name: 'NimSlice',
-    blurb: 'Sausage volleys incoming — swipe to slice them all. Never the black one.',
-    how: 'swipe to slice',
-    lbLabel: 'Slice',
+    name: 'MonSwat',
+    tag: 'One angry fly · 5 misses max · BONK!',
+    accent: '#facc15',
+    badge: 'SPEED',
+    thumb: thumbSwat,
+    Component: MonSwat,
+    skinGroup: 'chick',
   },
   {
     id: 'dash',
-    name: 'NimDash',
-    blurb: 'Sprint, jump & mid-air FLAP over blocks, pits & mustachioed flies. Stomp flies, grab Luna coins.',
-    how: 'tap = jump · tap mid-air = flap',
-    lbLabel: 'Dash',
+    name: 'MonDash',
+    tag: 'Mario-style platformer · stomp flies · grab MON',
+    accent: '#836ef9',
+    badge: 'PLATFORMER',
+    thumb: thumbDash,
+    Component: MonDash,
+    skinGroup: 'chick',
   },
 ]
 
-const shortAddr = (a) => {
-  if (!a) return ''
-  const s = a.replace(/\s/g, '')
-  return `${s.slice(0, 10)}…${s.slice(-6)}`
+const defaultSave = () => ({
+  best: { chick: 0, stack: 0, rush: 0, swat: 0, dash: 0 },
+  owned: { chick: ['classic'], stack: ['mint'] },
+  equipped: { chick: 'classic', stack: 'mint' },
+  name: '',
+})
+
+function loadSave() {
+  try {
+    const raw = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null')
+    if (!raw) return defaultSave()
+    const d = defaultSave()
+    return {
+      best: { ...d.best, ...raw.best },
+      owned: { ...d.owned, ...raw.owned },
+      equipped: { ...d.equipped, ...raw.equipped },
+      name: typeof raw.name === 'string' ? raw.name : '',
+    }
+  } catch {
+    return defaultSave()
+  }
 }
 
-function Logo() {
-  return (
-    <div className="logo-badge">
-      <img className="logo-chick" src={chickUrl} alt="NimHouse chick" draggable="false" />
-    </div>
-  )
-}
-
-const GAME_THUMBS = {
-  chick: thumbChick,
-  stack: thumbStack,
-  bull: thumbBull,
-  rush: thumbRush,
-  swat: thumbSwat,
-  slice: thumbSlice,
-  dash: thumbDash,
-}
-
-function GameThumb({ kind }) {
-  const src = GAME_THUMBS[kind]
-  if (!src) return null
-  return <img className="game-thumb" src={src} alt="" draggable={false} loading="lazy" />
-}
-
-function SkinThumb({ group, skin }) {
+function SkinThumb({ groupId, skin }) {
   const ref = useRef(null)
   useEffect(() => {
-    const c = ref.current
-    if (!c) return
-    const ctx = c.getContext('2d')
-    ctx.clearRect(0, 0, 52, 52)
-    if (group === 'chick') drawChicken(ctx, 24, 30, 0.72, skin, 0.6, 0.8)
-    else if (group === 'dart') drawDart(ctx, 26, 28, 0, skin, 1.05)
-    else drawStackPreview(ctx, skin?.hue ?? 158, 52, 52)
-  }, [group, skin])
-  return <canvas ref={ref} width={52} height={52} />
-}
-
-const CUP_NAMES = {
-  chick: 'NimChick',
-  stack: 'NimStack',
-  bull: 'NimBullseye',
-  rush: 'NimRush',
-  swat: 'NimSwat',
-  slice: 'NimSlice',
-  dash: 'NimDash',
-}
-
-function CheerBoard({ tick }) {
-  const [cheers, setCheers] = useState(null)
-  const [failed, setFailed] = useState(false)
-  useEffect(() => {
-    if (typeof fetch === 'undefined') {
-      setFailed(true)
-      return
+    const cvs = ref.current
+    if (!cvs) return
+    const ctx = cvs.getContext('2d')
+    let raf = 0
+    const render = (now = 0) => {
+      ctx.clearRect(0, 0, 56, 56)
+      if (groupId === 'chick') {
+        drawCat(ctx, 27, 29, 0.86, skin, now / 1000, Math.sin(now / 260) * 0.6, 0)
+        raf = requestAnimationFrame(render)
+      } else if (groupId === 'stack') {
+        drawStackPreview(ctx, skin.hue, 56, 56)
+      }
     }
-    let alive = true
-    // fresh=1 after a cheer: bypass any stale per-instance cache
-    fetch(tick > 0 ? '/api/cheer?fresh=1' : '/api/cheer')
-      .then((r) => r.json())
-      .then((j) => {
-        if (!alive) return
-        if (j.ok) {
-          setCheers(j.cheers)
-          setFailed(false)
-        } else setFailed(true)
-      })
-      .catch(() => alive && setFailed(true))
+    render()
     return () => {
-      alive = false
+      if (raf) cancelAnimationFrame(raf)
     }
-  }, [tick])
-
-  if (!cheers && !failed) return <div className="cup-note">Loading the cheer board…</div>
-  if (failed || cheers.length === 0)
-    return (
-      <div className="cup-note">
-        {cheers && cheers.length === 0 ? (
-          <>No cheers on the board yet — be the first to cheer the house 🐔</>
-        ) : (
-          'Cheer board unavailable right now.'
-        )}
-      </div>
-    )
-
-  const top = [...cheers].sort((a, b) => b.value - a.value).slice(0, 3)
-  const recent = cheers.slice(0, 6)
-  return (
-    <div className="cheer-board">
-      {top.length > 0 && (
-        <>
-          <div className="menu-sub">Top cheers</div>
-          {top.map((c, i) => (
-            <div className="cheer-row" key={c.id + 'top'}>
-              <b>{['🥇', '🥈', '🥉'][i]}</b> {c.name} <b>{fmtNim(c.value)}</b>
-              {c.message && <span className="cheer-quote"> “{c.message}”</span>}
-            </div>
-          ))}
-        </>
-      )}
-      <div className="menu-sub">Latest words</div>
-      {recent.map((c) => (
-        <div className="cheer-row" key={c.id}>
-          <span>{c.name}</span>
-          <span className="cheer-amount">{fmtNim(c.value)}</span>
-          {c.message && <span className="cheer-quote">“{c.message}”</span>}
-          <span className="cheer-hash" title="on-chain tx hash">
-            tx {String(c.txHash).slice(0, 6)}…{String(c.txHash).slice(-4)}
-          </span>
-        </div>
-      ))}
-      <p className="cup-note">
-        Every cheer is a real NIM payment to the NimHouse community wallet
-        {' '}({CHEER_ADDRESS.slice(0, 6)}…{CHEER_ADDRESS.slice(-4)}) — the full public ledger lives in
-        the open-source repo; verify any entry by its on-chain tx hash.
-      </p>
-    </div>
-  )
-}
-
-/** Local, per-device record of Cup entries (for the profile's win history). */
-function recordCupResult(game, periodId, score, rank) {
-  try {
-    const parsed = JSON.parse(localStorage.getItem('nimhouse.cup') || '[]')
-    const list = Array.isArray(parsed) ? parsed : []
-    list.unshift({ game, period: periodId, score, rank, ts: Date.now() })
-    const next = list.slice(0, 30)
-    localStorage.setItem('nimhouse.cup', JSON.stringify(next))
-    return next
-  } catch {
-    return []
-  }
-}
-
-/** Cup grid (P6904: 2026-09-15T12:00Z → 2026-09-17T16:00Z; P6905–P6908: 48h
- *  on the 16:00 UTC anchor; P6909+: 72h; P6910: extended special cup to
- *  2026-10-05T16:59Z; P6911+: 120h) — must stay in sync with api/cup.js */
-const PERIOD_MS = 2 * 86400 * 1000 // 2-day cups (P6905–P6908)
-const PERIOD3_MS = 3 * 86400 * 1000 // 3-day cups (P6909, P6910 base window)
-const PERIOD5_MS = 5 * 86400 * 1000 // 5-day cups (P6911 onward — house budget schedule)
-const P6904_START = Date.parse('2026-09-15T12:00:00.000Z') // P6904 open
-const P6904_END = Date.parse('2026-09-17T16:00:00.000Z') // P6904 close (2 days)
-const BASE_MS = P6904_END // anchor for P6905 onward
-const BASE_P = 6905
-const P3_START = Date.parse('2026-09-25T16:00:00.000Z') // P6909 open (3-day era)
-const P3_BASE = 6909
-const P6910_START = Date.parse('2026-09-28T16:00:00.000Z')
-const P6910_END = Date.parse('2026-10-05T16:59:00.000Z') // 5 Oct 23:59 WIB — extended special cup
-function cupPeriod(date = new Date()) {
-  const t = Date.parse(date)
-  let p, start, dur
-  if (t >= P6910_END) {
-    p = 6911 + Math.floor((t - P6910_END) / PERIOD5_MS)
-    start = new Date(P6910_END + (p - 6911) * PERIOD5_MS)
-    dur = PERIOD5_MS
-  } else if (t >= P6910_START) {
-    p = 6910
-    start = new Date(P6910_START)
-    dur = P6910_END - P6910_START
-  } else if (t >= P3_START) {
-    p = P3_BASE + Math.floor((t - P3_START) / PERIOD3_MS)
-    start = new Date(P3_START + (p - P3_BASE) * PERIOD3_MS)
-    dur = PERIOD3_MS
-  } else if (t >= P6904_START && t < P6904_END) {
-    p = 6904
-    start = new Date(P6904_START)
-    dur = P6904_END - P6904_START
-  } else if (t < P6904_START) {
-    p = 6904 - 1 - Math.floor((P6904_START - 1 - t) / PERIOD_MS)
-    start = new Date(P6904_START + (p - 6904) * PERIOD_MS)
-    dur = PERIOD_MS
-  } else {
-    p = BASE_P + Math.floor((t - BASE_MS) / PERIOD_MS)
-    start = new Date(BASE_MS + (p - BASE_P) * PERIOD_MS)
-    dur = PERIOD_MS
-  }
-  const end = new Date(start.getTime() + dur)
-  return {
-    id: `P${p}`,
-    start: start.toISOString().slice(0, 10),
-    end: end.toISOString().slice(0, 10),
-    closeUtc: end.toISOString().slice(11, 16),
-    daysLeft: Math.max(1, Math.round((end - t) / 86400000)),
-    startMs: start.getTime(),
-    endMs: end.getTime(),
-  }
-}
-
-function CupCard({ tick }) {
-  const [cup, setCup] = useState(null)
-  const [failed, setFailed] = useState(false)
-  useEffect(() => {
-    if (typeof fetch === 'undefined') {
-      setFailed(true)
-      return
-    }
-    let alive = true
-    fetch('/api/cup')
-      .then((r) => r.json())
-      .then((j) => {
-        if (!alive) return
-        if (j.ok) {
-          setCup(j)
-          setFailed(false)
-        } else setFailed(true)
-      })
-      .catch(() => alive && setFailed(true))
-    return () => {
-      alive = false
-    }
-  }, [tick])
-
-  const pool = cup?.pool
-  const walletReady = pool?.wallet && !/PENDING/.test(pool.wallet)
-  // Close labels — states:
-  //  1. current grid cup already closed & paid (pool.closedPeriods) → point
-  //     at the next cup's open time;
-  //  2. an early close inside the current window (pool.closeAt before the
-  //     grid end) → "closes EARLY";
-  //  3. normal countdown to the grid end (16:00 UTC).
-  const closeAt = Date.parse(pool?.closeAt || '')
-  const curClosed = !!(cup?.period && pool?.closedPeriods?.[cup.period.id])
-  const normalLabel = `closes ${cup?.period?.end ?? '…'} · ${cup?.period?.closeUtc ?? '16:00'} UTC (${cup?.period?.daysLeft ?? '…'}d left)`
-  let closeLabel = normalLabel
-  const paused = !!pool?.paused
-  if (paused) {
-    closeLabel = 'cup PAUSED — no prize pool right now · P6911 paid on-chain ✓ · next cup will be announced by the house'
-  } else if (curClosed && cup?.period?.endMs) {
-    const nextOpen = new Date(cup.period.endMs)
-    closeLabel = `closed — paid on-chain ✓ · next cup opens ${nextOpen.toISOString().slice(0, 10)} · ${nextOpen.toISOString().slice(11, 16)} UTC`
-  } else if (Number.isFinite(closeAt)) {
-    if (closeAt > Date.now() && closeAt < (cup?.period?.endMs ?? Infinity))
-      closeLabel = `closes EARLY ${new Date(closeAt).toISOString().slice(0, 10)} · ${new Date(closeAt)
-        .toISOString()
-        .slice(11, 16)} UTC (${Math.ceil((closeAt - Date.now()) / 3600000)}h left) — payout follows`
-    else if (closeAt > Date.now()) closeLabel = normalLabel
-    else closeLabel = 'closed — payout in progress'
-  }
-  return (
-    <div className="card cup-card">
-      <h3>
-        🏆 NimHouse Cup — {cup?.board?.isLast ? `${cup.board.period} (final)` : cup?.period?.id || '…'}
-        <span className="cup-period">{' '}</span>
-        <span className="cup-period">· {closeLabel}</span>
-      </h3>
-      <p className="cup-pool">
-        {paused ? (
-          <>
-            Prize pool paused by the house · <b>the leaderboard stays open</b> · last cup{' '}
-            {cup?.board?.paid ? 'paid on-chain ✓' : 'paid on-chain'}
-          </>
-        ) : (
-          <>
-            {pool?.perGameDailyNim ?? 100} NIM per game per cup · top 3 take{' '}
-            {pool?.splitPct?.join(' / ') ?? '50 / 30 / 20'}% · staked by the <b>NimHouse wallet</b>
-            {walletReady && <span className="cup-wallet"> · {pool.wallet.slice(0, 6)}…{pool.wallet.slice(-4)}</span>}
-          </>
-        )}
-      </p>
-      {cup ? (
-        <div className="cup-board">
-          {cup.games.map((g) => {
-            const top = cup.leaders[g] || []
-            const paid = cup.payouts[g]
-            return (
-              <div className="cup-row" key={g}>
-                <div className="cup-game">{CUP_NAMES[g]}</div>
-                <div className="cup-top">
-                  {top.length === 0 && <span className="cup-empty">no entries in this cup</span>}
-                  {top.slice(0, 5).map((e, i) => (
-                    <span className="cup-medal" key={e.device} title={e.device}>
-                      <b>{i < 3 ? ['🥇', '🥈', '🥉'][i] : `#${i + 1}`}</b> {e.name} <b>{e.score}</b>
-                    </span>
-                  ))}
-                  {paid && <span className="badge verified">paid ✓</span>}
-                </div>
-              </div>
-            )
-          })}
-        </div>
-      ) : (
-        !failed && (
-          <div className="cup-note">
-            Loading today's board…
-          </div>
-        )
-      )}
-      {cup?.board?.note && <p className="cup-note board-note">{cup.board.note}</p>}
-      <p className="cup-note">
-        Free to play · no entry fee, no gambling.{' '}
-        {paused ? (
-          <>
-            The cup is paused, so there is no pool to win right now — but every game still keeps
-            its leaderboard: your runs are ranked in-game (top 5 on your device) and the last
-            cup's standings with their on-chain payout transactions stay public below. When the
-            house funds the next cup, signed entries reopen and this notice disappears.
-          </>
-        ) : (
-          <>
-            Finish any game → <b>Enter the NimHouse Cup</b> (signs with your Nimiq wallet). One
-            entry per device per game per cup — best score counts. Top 3 per game get paid
-            on-chain at the end of each cup. Pool, entries &amp; payouts are public in the
-            open-source repo.
-          </>
-        )}
-      </p>
-    </div>
-  )
-}
-
-function MenuPanel({
-  wallet,
-  connected,
-  connecting,
-  connectErr,
-  chain,
-  accounts,
-  bests,
-  cupHistory,
-  claim,
-  claimBusy,
-  claimEditing,
-  draftName,
-  onDraftName,
-  onClaim,
-  onClaimEdit,
-  onClaimCancel,
-  onConnect,
-  onDisconnect,
-  onRefreshChain,
-  onClose,
-}) {
-  return (
-    <>
-      <div className="menu-backdrop" onClick={onClose} />
-      <div className="menu-panel">
-        <div className="menu-head">
-          <b>🐔 NimHouse</b>
-          <button className="menu-close" onClick={onClose} aria-label="Close menu">
-            ✕
-          </button>
-        </div>
-
-        <div className="menu-section">
-          <div className="menu-label">Player</div>
-          {claim && !claimEditing ? (
-            <div>
-              <div className="player-claimed">
-                <b>{claim.name}</b>
-                <span className="badge verified">🔒 signed</span>
-              </div>
-              <div className="wallet-meta">
-                Claimed by your wallet{claim.changes ? ` · changed ${claim.changes}×` : ''}. This is
-                your Cup identity.
-              </div>
-              <button className="btn small ghost" onClick={onClaimEdit} disabled={claimBusy}>
-                ✎ Change name (signs again)
-              </button>
-            </div>
-          ) : (
-            <div>
-              <input
-                className="name-input"
-                value={draftName}
-                placeholder="Choose a gamertag (1–16)"
-                maxLength={16}
-                onChange={(e) => onDraftName(e.target.value)}
-              />
-              <button
-                className="btn primary block"
-                disabled={claimBusy || !draftName.trim()}
-                onClick={() => onClaim(draftName)}
-              >
-                {claimBusy ? (
-                  <>
-                    <span className="spin" /> Signing…
-                  </>
-                ) : claim ? (
-                  'Submit new name'
-                ) : (
-                  'Submit name'
-                )}
-              </button>
-              {claimEditing && (
-                <button className="btn small ghost" onClick={onClaimCancel} disabled={claimBusy}>
-                  Cancel
-                </button>
-              )}
-              <div className="wallet-meta">
-                {claim
-                  ? 'Changing your name requires a new wallet signature.'
-                  : 'Submitting signs your name with your wallet — it becomes your Cup identity.'}
-              </div>
-            </div>
-          )}
-          <div className="menu-sub">Cup entries — your wins at the NimHouse</div>
-          {cupHistory.length === 0 ? (
-            <div className="cup-note">
-              No cup entries yet — finish a game, then hit <b>Enter the NimHouse Cup</b>.
-            </div>
-          ) : (
-            cupHistory.slice(0, 12).map((h, i) => (
-              <div className="cup-hist-row" key={h.ts + '-' + i}>
-                <span>{['🥇', '🥈', ''][h.rank - 1] || `#${h.rank}`}</span>
-                <b>{CUP_NAMES[h.game] || h.game}</b>
-                <span className="cup-hist-dim">{h.period}</span>
-                <span className="cup-hist-score">{h.score}</span>
-              </div>
-            ))
-          )}
-        </div>
-
-        <div className="menu-section">
-          <div className="menu-label">Best scores · this device</div>
-          <div className="best-grid">
-            {Object.entries(bests).map(([g, s]) => (
-              <span className="best-chip" key={g}>
-                {CUP_NAMES[g] || g} <b>{s}</b>
-              </span>
-            ))}
-          </div>
-        </div>
-
-        <div className="menu-section">
-          <div className="menu-label">
-            Nimiq Pay wallet
-            {wallet && (
-              <span className={`badge ${wallet.mode}`}>{wallet.mode === 'live' ? 'LIVE' : 'DEMO'}</span>
-            )}
-          </div>
-          {!wallet ? (
-            <div className="wallet-meta">
-              <span className="spin" /> Detecting Nimiq Pay…
-            </div>
-          ) : !connected ? (
-            <div>
-              {wallet.mode === 'demo' && (
-                <div className="wallet-meta" style={{ marginBottom: 10 }}>
-                  Running outside Nimiq Pay, so wallet actions are <b>simulated</b>. Open inside
-                  Nimiq Pay for real NIM payments.
-                </div>
-              )}
-              <button className="btn primary block" onClick={onConnect} disabled={connecting}>
-                {connecting ? (
-                  <>
-                    <span className="spin" /> Connecting…
-                  </>
-                ) : (
-                  'Connect wallet'
-                )}
-              </button>
-              {connectErr && (
-                <div className="wallet-meta" style={{ color: 'var(--red)' }}>
-                  {connectErr}
-                </div>
-              )}
-            </div>
-          ) : (
-            <div>
-              <div className="wallet-addr">{shortAddr(accounts?.[0])}</div>
-              <div className="wallet-meta">
-                Block {chain ? (chain.block || 0).toLocaleString() : '…'} · consensus{' '}
-                {chain && chain.consensus ? 'established ✓' : 'checking…'}
-              </div>
-              <div className="wallet-actions">
-                <button className="btn small ghost" onClick={onRefreshChain}>
-                  ↻ Refresh status
-                </button>
-                <button className="btn small ghost" onClick={onDisconnect}>
-                  Disconnect
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-      </div>
-    </>
-  )
+  }, [groupId, skin])
+  return <canvas ref={ref} width={56} height={56} className="skin-canvas" />
 }
 
 export default function App() {
-  const [wallet, setWallet] = useState(null)
-  const [view, setView] = useState('hub')
-  const [menuOpen, setMenuOpen] = useState(false)
-  const [claim, setClaim] = useState(null)
-  const [claimBusy, setClaimBusy] = useState(false)
-  const [claimEditing, setClaimEditing] = useState(false)
-  const [draftName, setDraftName] = useState('')
-  const [cupHistory, setCupHistory] = useState(() => {
-    try {
-      const h = JSON.parse(localStorage.getItem('nimhouse.cup') || '[]')
-      if (Array.isArray(h)) return h
-    } catch {
-      /* ignore */
-    }
-    return []
+  const [save, setSave] = useState(loadSave)
+  const [active, setActive] = useState(null)
+  const [wallet, setWallet] = useState({
+    mode: 'loading',
+    address: '',
+    chainId: null,
+    isMonadTestnet: false,
+    hasProvider: false,
+    balanceMon: null,
   })
-
-  // wallet
-  const [connected, setConnected] = useState(false)
-  const [connecting, setConnecting] = useState(false)
-  const [accounts, setAccounts] = useState(null)
-  const [chain, setChain] = useState(null)
-  const [connectErr, setConnectErr] = useState(null)
-
-  // player + skins
-  const [player, setPlayer] = useState(() => localStorage.getItem('nimhouse.player') || '')
-  const [owned, setOwned] = useState(() => {
-    try {
-      const o = JSON.parse(localStorage.getItem('nimhouse.owned'))
-      if (o && o.chick && o.dart && o.stack) return o
-    } catch {
-      /* ignore */
-    }
-    return { chick: ['classic'], dart: ['classic'], stack: ['mint'] }
-  })
-  const [sel, setSel] = useState(() => {
-    try {
-      const s = JSON.parse(localStorage.getItem('nimhouse.sel'))
-      if (s && s.chick && s.dart && s.stack) return s
-    } catch {
-      /* ignore */
-    }
-    return { chick: 'classic', dart: 'classic', stack: 'mint' }
-  })
-  const [busy, setBusy] = useState(null)
-  const [lastTx, setLastTx] = useState(null)
+  const [muted, setMutedState] = useState(false)
+  const [toast, setToast] = useState('')
+  const [busySkin, setBusySkin] = useState('')
+  const [cheers, setCheers] = useState([])
+  const [cheerLive, setCheerLive] = useState(false)
+  const [cheerAmt, setCheerAmt] = useState(10000) // 0.1 MON
   const [cheerMsg, setCheerMsg] = useState('')
-  const [lbTab, setLbTab] = useState('chick')
-  const [lbTick, setLbTick] = useState(0)
-  const [cheerTick, setCheerTick] = useState(0)
-  // Cup state, fetched once for the game screens: the in-game leaderboard must
-  // stay up even while the cup is paused (no prize pool) — scores keep counting.
-  const [cupState, setCupState] = useState(null)
+  const [cheerBusy, setCheerBusy] = useState(false)
+  const [cup, setCup] = useState(null)
+  const [cupTab, setCupTab] = useState('chick')
+  const [nameOpen, setNameOpen] = useState(false)
+  const [nameDraft, setNameDraft] = useState('')
+  const [nameClaim, setNameClaim] = useState(null)
+  const [nameBusy, setNameBusy] = useState(false)
+  const [netBusy, setNetBusy] = useState(false)
+  const deviceId = useRef(getDeviceId())
+
+  const showToast = useCallback((msg) => {
+    setToast(msg)
+    setTimeout(() => setToast((m) => (m === msg ? '' : m)), 2800)
+  }, [])
+
+  const loadCup = useCallback(async () => {
+    try {
+      const r = await fetch('/api/cup')
+      if (!r.ok) return
+      const j = await r.json()
+      if (j?.ok) setCup(j)
+    } catch {
+      /* api offline */
+    }
+  }, [])
+
   useEffect(() => {
-    if (typeof fetch === 'undefined') return
     let alive = true
-    fetch('/api/cup')
-      .then((r) => r.json())
+    initWallet((nextState) => {
+      if (alive) setWallet((prev) => ({ ...prev, ...nextState }))
+    }).then((w) => {
+      if (alive) setWallet(w)
+    })
+    loadCup()
+    fetch(`/api/name?device=${deviceId.current}`)
+      .then((r) => (r.ok ? r.json() : null))
       .then((j) => {
-        if (alive && j?.ok) setCupState({ paused: !!j.pool?.paused, period: j.period, board: j.board })
+        if (!alive || !j?.ok || !j.claim) return
+        setNameClaim(j.claim)
+        setSave((prev) => (prev.name === j.claim.name ? prev : { ...prev, name: j.claim.name }))
       })
       .catch(() => {})
     return () => {
       alive = false
     }
+  }, [loadCup])
+
+  const loadCheers = useCallback(async (fresh = false) => {
+    try {
+      const r = await fetch(fresh ? '/api/cheer?fresh=1' : '/api/cheer')
+      if (!r.ok) return
+      const j = await r.json()
+      if (j?.ok && Array.isArray(j.cheers)) {
+        setCheers(j.cheers)
+        setCheerLive(true)
+      }
+    } catch {
+      /* api unavailable */
+    }
   }, [])
 
-  // toast
-  const [toast, setToast] = useState(null)
-  const toastTimer = useRef(null)
-  function toastMsg(msg, err = false) {
-    setToast({ msg, err })
-    clearTimeout(toastTimer.current)
-    toastTimer.current = setTimeout(() => setToast(null), 3400)
+  useEffect(() => {
+    loadCheers(false)
+  }, [loadCheers])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(save))
+    } catch {
+      /* ignore quota */
+    }
+  }, [save])
+
+  const handleConnectWallet = async () => {
+    if (!wallet.connect) return
+    setNetBusy(true)
+    const res = await wallet.connect()
+    setNetBusy(false)
+    if (res.ok) {
+      await wallet.refresh?.()
+      showToast('Monad Testnet wallet connected! ⚡')
+    } else if (res.error === 'no-wallet') {
+      showToast('No EVM wallet detected (MetaMask / Rabby / Phantom) — using Demo Mode')
+    } else {
+      showToast(res.error || 'Wallet connection cancelled')
+    }
   }
 
-  useEffect(() => {
-    getWallet().then((w) => {
-      setWallet(w)
-      // Restore a saved wallet connection (public address only) so users
-      // are not re-prompted for the wallet sheet on every reload.
-      if (w.mode === 'live') {
-        try {
-          const saved = JSON.parse(localStorage.getItem('nimhouse.wallet') || 'null')
-          if (saved && saved.addr) {
-            setAccounts(Array.isArray(saved.all) && saved.all.length ? saved.all : [saved.addr])
-            setConnected(true)
-            Promise.all([
-              w.nimiq.isConsensusEstablished().catch(() => null),
-              w.nimiq.getBlockNumber().catch(() => null),
-            ]).then(([consensus, block]) => {
-              if (block !== null) setChain({ consensus: consensus === true, block })
-            })
-          }
-        } catch { /* corrupt storage — ignore */ }
-      }
+  const handleSwitchNetwork = async () => {
+    if (!wallet.switchToMonad) return
+    setNetBusy(true)
+    const res = await wallet.switchToMonad()
+    setNetBusy(false)
+    if (res.ok) {
+      await wallet.refresh?.()
+      showToast('Switched to Monad Testnet (Chain ID 10143)! ⚡')
+    } else {
+      showToast(res.error || 'Could not switch network in wallet')
+    }
+  }
+
+  const onScore = useCallback((gameId, score) => {
+    setSave((prev) => {
+      if (score <= (prev.best[gameId] || 0)) return prev
+      return { ...prev, best: { ...prev.best, [gameId]: score } }
     })
-    // Pre-warm the pseudonymous device id (anti-spam identity) so the
-    // Nimiq Pay permission prompt — if needed — happens once at session
-    // start, not mid-cup after a game.
-    getDeviceId().catch(() => {})
-    return () => clearTimeout(toastTimer.current)
   }, [])
 
-  // Look up this device's claimed name (public registry in the repo).
-  useEffect(() => {
-    if (typeof fetch === 'undefined') return
-    let alive = true
-    getDeviceId()
-      .then((dev) => fetch(`/api/name?device=${dev}`))
-      .then((r) => r.json())
-      .then((j) => {
-        if (!alive || !j.ok || !j.claim) return
-        setClaim(j.claim)
-        setPlayer((p) => {
-          localStorage.setItem('nimhouse.player', j.claim.name)
-          return j.claim.name
+  const handleActiveScore = useCallback(
+    (s) => {
+      if (active) onScore(active, s)
+    },
+    [active, onScore]
+  )
+
+  const submitToCup = useCallback(
+    async (gameId, score) => {
+      if (wallet.mode !== 'monad' || !wallet.sign) {
+        if (wallet.hasProvider && wallet.connect) {
+          const c = await wallet.connect()
+          if (!c.ok) return { ok: false, error: 'Connect your Monad Testnet wallet first to sign scores' }
+        } else {
+          return {
+            ok: false,
+            error: 'Install MetaMask / Rabby on Monad Testnet to sign verified Cup scores',
+          }
+        }
+      }
+      if (!NAME_RE.test(save.name || '')) {
+        setNameDraft(save.name || '')
+        setNameOpen(true)
+        return { ok: false, error: 'Claim your player name in the popup, then tap Enter Cup again!' }
+      }
+      const period = cup?.period?.id || cupPeriodId()
+      const msg = `MonHouse Cup | game=${gameId} | period=${period} | score=${score} | name=${save.name} | device=${deviceId.current}`
+      const sig = await wallet.sign(msg)
+      if (!sig.ok) return { ok: false, error: sig.error || 'Signature cancelled' }
+      try {
+        const r = await fetch('/api/cup/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            game: gameId,
+            period,
+            score,
+            name: save.name,
+            device: deviceId.current,
+            address: sig.address || wallet.address,
+            message: msg,
+            publicKey: sig.publicKey,
+            signature: sig.signature,
+          }),
         })
-      })
-      .catch(() => {})
-    return () => {
-      alive = false
-    }
-  }, [])
+        const j = await r.json()
+        if (j?.ok) loadCup()
+        return j || { ok: false, error: 'submit failed' }
+      } catch {
+        return { ok: false, error: 'network error' }
+      }
+    },
+    [wallet, cup, save.name, loadCup]
+  )
 
-  // Claim (or re-claim) the player name with a wallet signature.
-  async function submitClaim(rawName) {
-    if (!wallet || claimBusy) return
-    const nm = String(rawName || '').trim()
-    if (!/^[A-Za-z0-9][A-Za-z0-9 ._\-]{0,15}$/.test(nm)) {
-      toastMsg('Name: 1–16 chars — letters, numbers, space, . _ -', true)
+  const toggleMute = () => {
+    const next = !muted
+    setMuted(next)
+    setMutedState(next)
+  }
+
+  const claimName = async () => {
+    const clean = nameDraft.trim()
+    if (!NAME_RE.test(clean)) {
+      showToast('1–16 chars: letters, numbers, space, . _ -')
       return
     }
-    if (wallet.mode === 'demo') {
-      setPlayer(nm)
-      localStorage.setItem('nimhouse.player', nm)
-      setClaimEditing(false)
-      toastMsg(`Demo mode: “${nm}” saved on this device only`)
+    if (nameClaim && nameClaim.name === clean) {
+      setNameOpen(false)
       return
     }
-    setClaimBusy(true)
+    if (wallet.mode !== 'monad' || !wallet.sign) {
+      if (wallet.hasProvider && wallet.connect) {
+        const c = await wallet.connect()
+        if (!c.ok) {
+          setSave((prev) => ({ ...prev, name: clean }))
+          setNameOpen(false)
+          showToast(`Saved locally as ${clean}`)
+          return
+        }
+      } else {
+        setSave((prev) => ({ ...prev, name: clean }))
+        setNameOpen(false)
+        showToast(`Name saved as ${clean} (Demo Mode)`)
+        return
+      }
+    }
+    const isChange = !!nameClaim
+    setNameBusy(true)
+    const msg = `MonHouse Name | name=${clean} | device=${deviceId.current} | ts=${Date.now()}`
+    const sig = await wallet.sign(msg)
+    if (!sig.ok) {
+      setNameBusy(false)
+      showToast(sig.error || 'Signature cancelled')
+      return
+    }
     try {
-      const device = await getDeviceId()
-      const message = `NimHouse Name | name=${nm} | device=${device}`
-      const res = await wallet.nimiq.sign(message)
-      if (res && res.error) throw new Error(res.error.message || 'Signing rejected')
       const r = await fetch('/api/name/claim', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
-          name: nm,
-          device,
-          message,
-          publicKey: String(res.publicKey).replace(/^0x/i, ''),
-          signature: String(res.signature).replace(/^0x/i, ''),
+          name: clean,
+          device: deviceId.current,
+          message: msg,
+          address: sig.address || wallet.address,
+          publicKey: sig.publicKey,
+          signature: sig.signature,
         }),
       })
-      const j = await r.json().catch(() => ({ ok: false, error: 'network error' }))
-      if (!j.ok) throw new Error(j.error || 'Name claim failed')
-      setClaim(j.claim)
-      setPlayer(nm)
-      localStorage.setItem('nimhouse.player', nm)
-      setClaimEditing(false)
-      setLbTick((t) => t + 1)
-      toastMsg(
-        j.claim.changes > 0
-          ? `Name updated to “${nm}” 📝`
-          : `Name “${nm}” signed & locked to your wallet 🔒`
-      )
-    } catch (e) {
-      toastMsg(e?.message || 'Name claim failed', true)
-    } finally {
-      setClaimBusy(false)
-    }
-  }
-
-  useEffect(() => {
-    localStorage.setItem('nimhouse.owned', JSON.stringify(owned))
-  }, [owned])
-  useEffect(() => {
-    localStorage.setItem('nimhouse.sel', JSON.stringify(sel))
-  }, [sel])
-
-  // ---------------- wallet actions ----------------
-  async function connect() {
-    if (!wallet || connecting) return
-    setConnecting(true)
-    setConnectErr(null)
-    try {
-      const res = await wallet.nimiq.listAccounts()
-      if (res && res.error) throw new Error(res.error.message || 'Permission denied')
-      const accs = Array.isArray(res) ? res : []
-      if (!accs.length) throw new Error('No accounts found in Nimiq Pay')
-      const [consensus, block] = await Promise.all([
-        wallet.nimiq.isConsensusEstablished(),
-        wallet.nimiq.getBlockNumber(),
-      ])
-      setAccounts(accs)
-      setChain({ consensus: consensus === true, block })
-      setConnected(true)
-      sfx.pop()
-      // Persist the connection (public address only) so reloads do NOT
-      // re-prompt the wallet sheet.
-      try {
-        localStorage.setItem(
-          'nimhouse.wallet',
-          JSON.stringify({ addr: accs[0], all: accs, at: Date.now() }),
-        )
-      } catch { /* private mode — fine */ }
-    } catch (e) {
-      setConnectErr(e?.error?.message || e?.message || 'Could not connect to the wallet')
-    } finally {
-      setConnecting(false)
-    }
-  }
-
-  async function refreshChain() {
-    if (!wallet) return
-    try {
-      const [consensus, block] = await Promise.all([
-        wallet.nimiq.isConsensusEstablished(),
-        wallet.nimiq.getBlockNumber(),
-      ])
-      setChain({ consensus: consensus === true, block })
-    } catch {
-      /* keep old values */
-    }
-  }
-
-  function disconnect() {
-    setConnected(false)
-    setAccounts(null)
-    setChain(null)
-    try { localStorage.removeItem('nimhouse.wallet') } catch { /* ignore */ }
-  }
-
-  async function verifyScore(game, entryId) {
-    if (!wallet) return { ok: false, error: 'Wallet not ready yet' }
-    const payload = JSON.stringify({
-      app: 'NimHouse',
-      game,
-      entryId,
-      player: player || 'Anonymous',
-      ts: Date.now(),
-    })
-    try {
-      const res = await wallet.nimiq.sign(payload)
-      if (res && res.error) return { ok: false, error: res.error.message || 'Signing rejected' }
-      markVerified(game, entryId)
-      setLbTick((t) => t + 1)
-      return { ok: true, signature: res.signature }
-    } catch (e) {
-      return { ok: false, error: e?.message || 'Signing failed' }
-    }
-  }
-
-  async function cupSubmit(game, score) {
-    if (!wallet || wallet.mode === 'demo') return { ok: false, error: 'Open inside Nimiq Pay to enter the Cup' }
-    const period = cupPeriod()
-    try {
-      const device = await getDeviceId()
-      const message = `NimHouse Cup | game=${game} | period=${period.id} | score=${Math.floor(score)} | device=${device}`
-      const res = await wallet.nimiq.sign(message)
-      if (res && res.error) return { ok: false, error: res.error.message || 'Signing rejected' }
-      const body = {
-        game,
-        period: period.id,
-        score: Math.floor(score),
-        name: player || 'Anonymous',
-        device,
-        address: Array.isArray(accounts) && accounts[0] ? accounts[0] : '',
-        message,
-        publicKey: res.publicKey,
-        signature: res.signature,
-      }
-      const r = await fetch('/api/cup/submit', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(body),
-      })
-      const json = await r.json().catch(() => ({ ok: false, error: 'network error' }))
-      if (json.ok) setCupHistory(recordCupResult(game, period.id, json.score, json.rank))
-      setLbTick((t) => t + 1)
-      return json
-    } catch (e) {
-      return { ok: false, error: e?.message || 'Cup entry failed' }
-    }
-  }
-
-  // ---------------- shop ----------------
-  function selectSkin(group, id) {
-    setSel((s) => ({ ...s, [group]: id }))
-    sfx.pop()
-  }
-
-  async function buySkin(groupId, skin) {
-    if (!wallet) return
-    if (owned[groupId]?.includes(skin.id)) {
-      selectSkin(groupId, skin.id)
-      return
-    }
-    const key = groupId + ':' + skin.id
-    setBusy(key)
-    try {
-      if (skin.price === 0) {
-        setOwned((o) => ({ ...o, [groupId]: [...o[groupId], skin.id] }))
-        selectSkin(groupId, skin.id)
-        toastMsg(`Equipped ${skin.name}`)
+      const j = await r.json()
+      setNameBusy(false)
+      if (!j?.ok) {
+        showToast(j?.error || 'Could not claim name')
         return
       }
-      const hash = await wallet.nimiq.sendBasicTransactionWithData({
-        recipient: CHEER_ADDRESS,
-        value: skin.price,
-        data: `NimHouse purchase: ${skin.name} (cosmetic only)`,
-      })
-      if (hash && hash.error) throw new Error(hash.error.message || 'Transaction failed')
-      setOwned((o) => ({ ...o, [groupId]: [...o[groupId], skin.id] }))
-      selectSkin(groupId, skin.id)
-      setLastTx(`Paid ${fmtNim(skin.price)} · ${shortHash(hash)}`)
+      setNameClaim(j.claim)
+      setSave((prev) => ({ ...prev, name: j.claim.name }))
+      setNameOpen(false)
       sfx.buy()
-      toastMsg(
-        wallet.mode === 'demo'
-          ? `Simulated NIM payment (demo mode): ${skin.name}`
-          : `Purchased ${skin.name} with NIM`
-      )
-    } catch (e) {
-      toastMsg(e?.error?.message || e?.message || 'Transaction failed', true)
-    } finally {
-      setBusy(null)
+      showToast(isChange ? `Name changed to ${j.claim.name}!` : `Signed & claimed ${j.claim.name}!`)
+    } catch {
+      setNameBusy(false)
+      showToast('Network error — try again')
     }
   }
 
-  // ---------------- cheer ----------------
-  async function cheer(amountNim) {
-    if (!wallet || !connected) return
-    const value = Math.round(amountNim * LUNA_PER_NIM)
-    const key = 'cheer' + amountNim
-    setBusy(key)
-    try {
-      const msg = (cheerMsg.trim() || 'let’s go').slice(0, 60)
-      const data = `NimHouse cheer for ${player || 'the house'}: ${msg}`
-      const hash = await wallet.nimiq.sendBasicTransactionWithData({
-        recipient: CHEER_ADDRESS,
-        value,
-        data,
-      })
-      if (hash && hash.error) throw new Error(hash.error.message || 'Transaction failed')
-      setLastTx(`Cheer sent · ${shortHash(hash)}`)
-      // publish to the public cheer board (best-effort — the payment is on-chain either way)
-      if (wallet.mode === 'live') {
-        getDeviceId().then(async (device) => {
-          try {
-            await fetch('/api/cheer', {
-              method: 'POST',
-              headers: { 'Content-Type': 'application/json' },
-              body: JSON.stringify({
-                name: player || 'Anonymous',
-                message: msg,
-                value,
-                txHash: hash,
-                device,
-                ts: Date.now(),
-              }),
-            })
-            setCheerTick((t) => t + 1)
-          } catch {
-            /* board sync failed silently — tx hash remains verifiable */
-          }
+  const sendCheer = async () => {
+    if (cheerBusy) return
+    if (!NAME_RE.test(save.name || '')) {
+      setNameDraft(save.name || '')
+      setNameOpen(true)
+      showToast('Set your player name first to post on the Cheer board!')
+      return
+    }
+    const msg = cheerMsg.trim()
+    setCheerBusy(true)
+    const res = await wallet.pay({
+      value: cheerAmt,
+      memo: `MonHouse cheer: ${msg || 'GG!'}`,
+      recipient: CHEER_ADDRESS,
+    })
+    if (!res.ok) {
+      setCheerBusy(false)
+      showToast(res.error || 'Cheer cancelled')
+      return
+    }
+
+    const optimistic = {
+      id: 'local-' + Date.now(),
+      name: save.name,
+      message: msg,
+      value: cheerAmt,
+      txHash: res.txHash,
+      ts: Date.now(),
+    }
+    setCheers((prev) => [optimistic, ...prev])
+    setCheerMsg('')
+    sfx.win()
+
+    if (res.demo) {
+      try {
+        await fetch('/api/cheer', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            name: save.name,
+            message: msg,
+            value: cheerAmt,
+            txHash: res.txHash,
+            device: deviceId.current,
+            ts: optimistic.ts,
+          }),
         })
+        await loadCheers(true)
+      } catch {
+        /* local preview */
       }
-      sfx.win()
-      toastMsg(
-        wallet.mode === 'demo'
-          ? `Simulated cheer (demo mode): ${fmtNim(value)}`
-          : `Cheered the house with ${fmtNim(value)} 🎉`
-      )
-    } catch (e) {
-      toastMsg(e?.error?.message || e?.message || 'Transaction failed', true)
-    } finally {
-      setBusy(null)
+      setCheerBusy(false)
+      showToast(`Demo cheer posted (${fmtMon(cheerAmt)})! Connect Monad wallet for real MON tx`)
+      return
     }
+
+    try {
+      const r = await fetch('/api/cheer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: save.name,
+          message: msg,
+          value: cheerAmt,
+          txHash: res.txHash,
+          device: deviceId.current,
+          ts: optimistic.ts,
+        }),
+      })
+      const j = await r.json().catch(() => null)
+      if (r.ok && j?.ok) {
+        showToast(`Thanks for the ${fmtMon(cheerAmt)} cheer on Monad Testnet! ♥`)
+        await loadCheers(true)
+        wallet.refresh?.()
+      } else {
+        showToast(`MON sent! (${j?.error || 'board sync pending'})`)
+      }
+    } catch {
+      showToast('MON sent on Monad Testnet!')
+    }
+    setCheerBusy(false)
   }
 
-  // ---------------- derived ----------------
-  const bests = useMemo(
-    () => ({
-      chick: bestScore('chick'),
-      stack: bestScore('stack'),
-      bull: bestScore('bull'),
-      rush: bestScore('rush'),
-      swat: bestScore('swat'),
-      slice: bestScore('slice'),
-      dash: bestScore('dash'),
-    }),
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-    [view, lbTick]
+  const buyOrEquip = async (groupId, skin) => {
+    const owned = save.owned[groupId]?.includes(skin.id)
+    if (owned) {
+      setSave((prev) => ({
+        ...prev,
+        equipped: { ...prev.equipped, [groupId]: skin.id },
+      }))
+      sfx.pop()
+      return
+    }
+    const key = `${groupId}:${skin.id}`
+    setBusySkin(key)
+    const res = await wallet.pay({
+      value: skin.price,
+      memo: `MonHouse skin: ${skin.name}`,
+    })
+    setBusySkin('')
+    if (!res.ok) {
+      showToast(res.error || 'Payment cancelled')
+      return
+    }
+    sfx.buy()
+    setSave((prev) => ({
+      ...prev,
+      owned: { ...prev.owned, [groupId]: [...(prev.owned[groupId] || []), skin.id] },
+      equipped: { ...prev.equipped, [groupId]: skin.id },
+    }))
+    wallet.refresh?.()
+    showToast(
+      res.demo
+        ? `Unlocked ${skin.name} (Demo Mode)!`
+        : `Unlocked ${skin.name} on Monad Testnet! ✨`
+    )
+  }
+
+  const soundIcon = muted ? (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <line x1="23" y1="9" x2="17" y2="15" />
+      <line x1="17" y1="9" x2="23" y2="15" />
+    </svg>
+  ) : (
+    <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.4" strokeLinecap="round" strokeLinejoin="round" aria-hidden="true">
+      <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5" />
+      <path d="M15.54 8.46a5 5 0 0 1 0 7.07" />
+      <path d="M19.07 4.93a10 10 0 0 1 0 14.14" />
+    </svg>
   )
-  const lb = useMemo(() => loadLB(lbTab), [lbTab, lbTick, view])
 
-  // resolve the selected skin definition from a group
-  const skinOf = (g) => {
-    const group = SKIN_GROUPS.find((x) => x.id === g)
-    return group.skins.find((x) => x.id === sel[g]) || group.skins[0]
-  }
-  const chickSkin = skinOf('chick')
-  const stackSkin = skinOf('stack')
-  const dartSkin = skinOf('dart')
+  const nameModal = nameOpen && (
+    <div className="name-modal" onClick={() => !nameBusy && setNameOpen(false)}>
+      <div className="name-card" onClick={(e) => e.stopPropagation()}>
+        <div className="name-title">
+          {nameClaim ? 'Change your player name' : 'Claim your MonHouse name'}
+        </div>
+        <p className="name-hint">
+          {nameClaim ? (
+            <>
+              Currently signed as <strong>{nameClaim.name}</strong>. Sign a free EIP-191 message
+              with the same Monad wallet to update it (no gas required).
+            </>
+          ) : (
+            <>
+              Required before entering the MonHouse Cup or Cheer board. Free EIP-191{' '}
+              <code>personal_sign</code> signature — zero gas cost!
+            </>
+          )}
+        </p>
+        <input
+          className="cheer-input"
+          type="text"
+          maxLength={16}
+          placeholder="e.g. GmonadCat"
+          value={nameDraft}
+          onChange={(e) => setNameDraft(e.target.value)}
+          onKeyDown={(e) => e.key === 'Enter' && claimName()}
+          disabled={nameBusy}
+          autoFocus
+        />
+        <div className="overlay-actions" style={{ marginTop: 12 }}>
+          <button className="btn ghost" onClick={() => setNameOpen(false)} disabled={nameBusy}>
+            Cancel
+          </button>
+          <button className="btn primary" onClick={claimName} disabled={nameBusy}>
+            {nameBusy ? 'Signing…' : nameClaim ? 'Sign & Update' : 'Sign & Claim'}
+          </button>
+        </div>
+      </div>
+    </div>
+  )
 
-  const gameProps = {
-    player: player || undefined,
-    onExit: () => {
-      setView('hub')
-      setLbTick((t) => t + 1)
-    },
-    onScore: () => setLbTick((t) => t + 1),
-    walletMode: wallet?.mode,
-    cupState,
-  }
-
-  // ---------------- game views ----------------
-  if (view === 'chick') {
+  // --- Active Mini-Game Screen ---
+  if (active) {
+    const game = GAMES.find((g) => g.id === active)
+    const { Component } = game
+    const best = save.best[game.id] || 0
+    const skinId = save.equipped[game.skinGroup]
+    const catSkinId = save.equipped.chick || 'classic'
+    const myEntry = (cup?.leaders?.[game.id] || []).find((e) => e.device === deviceId.current)?.score
+    const closeMs = Date.parse(cup?.pool?.closeAt || '')
+    const cupClosed =
+      !!cup?.pool?.paused ||
+      !!cup?.pool?.closedPeriods?.[cup?.period?.id] ||
+      (Number.isFinite(closeMs) && Date.now() >= closeMs)
+    const cupProps = {
+      myEntry,
+      closed: cupClosed,
+      paused: !!cup?.pool?.paused,
+      onSubmit: (s) => submitToCup(game.id, s),
+    }
     return (
-      <>
-        <NimChick skin={chickSkin} {...gameProps} requestVerify={(id) => verifyScore('chick', id)} requestCup={(score) => cupSubmit('chick', score)} />
-        {toast && <div className={`toast ${toast.err ? 'err' : ''}`}>{toast.msg}</div>}
-      </>
-    )
-  }
-  if (view === 'stack') {
-    return (
-      <>
-        <NimStack skin={stackSkin} {...gameProps} requestVerify={(id) => verifyScore('stack', id)} requestCup={(score) => cupSubmit('stack', score)} />
-        {toast && <div className={`toast ${toast.err ? 'err' : ''}`}>{toast.msg}</div>}
-      </>
-    )
-  }
-  if (view === 'bull') {
-    return (
-      <>
-        <NimBullseye skin={dartSkin} {...gameProps} requestVerify={(id) => verifyScore('bull', id)} requestCup={(score) => cupSubmit('bull', score)} />
-        {toast && <div className={`toast ${toast.err ? 'err' : ''}`}>{toast.msg}</div>}
-      </>
-    )
-  }
-  if (view === 'rush') {
-    return (
-      <>
-        <NimRush skin={chickSkin} {...gameProps} requestVerify={(id) => verifyScore('rush', id)} requestCup={(score) => cupSubmit('rush', score)} />
-        {toast && <div className={`toast ${toast.err ? 'err' : ''}`}>{toast.msg}</div>}
-      </>
-    )
-  }
-  if (view === 'swat') {
-    return (
-      <>
-        <NimSwat {...gameProps} requestVerify={(id) => verifyScore('swat', id)} requestCup={(score) => cupSubmit('swat', score)} />
-        {toast && <div className={`toast ${toast.err ? 'err' : ''}`}>{toast.msg}</div>}
-      </>
-    )
-  }
-  if (view === 'slice') {
-    return (
-      <>
-        <NimSlice skin={chickSkin} {...gameProps} requestVerify={(id) => verifyScore('slice', id)} requestCup={(score) => cupSubmit('slice', score)} />
-        {toast && <div className={`toast ${toast.err ? 'err' : ''}`}>{toast.msg}</div>}
-      </>
-    )
-  }
-  if (view === 'dash') {
-    return (
-      <>
-        <NimDash skin={chickSkin} {...gameProps} requestVerify={(id) => verifyScore('dash', id)} requestCup={(score) => cupSubmit('dash', score)} />
-        {toast && <div className={`toast ${toast.err ? 'err' : ''}`}>{toast.msg}</div>}
-      </>
-    )
-  }
-
-  // ---------------- hub ----------------
-  return (
-    <div className="app">
-      <div className="masthead">
-        <Logo />
-        <div className="masthead-text">
-          <div className="wordmark">
-            Nim<span>House</span>
+      <div className="screen game-screen">
+        <header className="topbar game-topbar">
+          <button className="icon-btn" onClick={() => setActive(null)} aria-label="Back">
+            ← Hub
+          </button>
+          <div className="topbar-title">
+            <img src={catHeroImg} alt="" className="mini-cat-icon" />
+            <span>{game.name}</span>
           </div>
-          <div className="sub">Skill games inside Nimiq Pay · Cycle II</div>
+          <button className="icon-btn round" onClick={toggleMute} aria-label="Toggle sound">
+            {soundIcon}
+          </button>
+        </header>
+        <Component
+          best={best}
+          skinId={skinId}
+          catSkinId={catSkinId}
+          onScore={handleActiveScore}
+          cup={cupProps}
+        />
+        {nameModal}
+        {toast && <div className="toast">{toast}</div>}
+      </div>
+    )
+  }
+
+  const totalBest = GAMES.reduce((sum, g) => sum + (save.best[g.id] || 0), 0)
+
+  // --- Hub Screen ---
+  return (
+    <div className="screen hub">
+      {/* Top Brand & Monad Wallet Bar */}
+      <header className="topbar">
+        <div className="brand">
+          <div className="brand-avatar">
+            <img src={catHeroImg} alt="MonHouse Absurd Cat" className="brand-cat-img" />
+          </div>
+          <div>
+            <div className="brand-name">
+              MonHouse <span className="brand-pill">TESTNET</span>
+            </div>
+            <div className="brand-sub">5 Absurd Cat Skill Games · Monad</div>
+          </div>
         </div>
-        <button
-          className="menu-btn"
-          onClick={() => {
-            setDraftName(claim?.name || player)
-            setMenuOpen(true)
-          }}
-          aria-label="Open menu"
-        >
-          ☰
-        </button>
+        <div className="topbar-right">
+          {wallet.mode === 'monad' ? (
+            wallet.isMonadTestnet ? (
+              <button
+                className="wallet-pill live"
+                onClick={() => wallet.refresh?.()}
+                title={`${wallet.address} on Monad Testnet (Chain ID 10143)`}
+              >
+                <span className="dot live" />
+                <span>
+                  {shortAddr(wallet.address)}
+                  {wallet.balanceMon ? ` · ${wallet.balanceMon} MON` : ''}
+                </span>
+              </button>
+            ) : (
+              <button
+                className="wallet-pill warn"
+                onClick={handleSwitchNetwork}
+                disabled={netBusy}
+                title="Switch wallet to Monad Testnet (Chain ID 10143)"
+              >
+                <span className="dot warn" />
+                <span>{netBusy ? 'Switching…' : 'Switch to Monad (10143)'}</span>
+              </button>
+            )
+          ) : (
+            <button
+              className="wallet-pill connect"
+              onClick={handleConnectWallet}
+              disabled={netBusy}
+              title="Connect MetaMask, Rabby, or any EVM wallet on Monad Testnet"
+            >
+              <span className="dot connect" />
+              <span>{netBusy ? 'Connecting…' : wallet.hasProvider ? 'Connect Monad' : 'Demo · Connect'}</span>
+            </button>
+          )}
+          <button className="icon-btn round" onClick={toggleMute} aria-label="Toggle sound">
+            {soundIcon}
+          </button>
+        </div>
+      </header>
+
+      {/* Monad Testnet Network Strip */}
+      <div className="monad-strip">
+        <div className="monad-strip-left">
+          <span className="monad-diamond">◈</span>
+          <span>
+            <strong>Monad Testnet</strong> · Chain ID <code>10143</code> · Token <code>MON</code>
+          </span>
+        </div>
+        <div className="monad-strip-actions">
+          {wallet.hasProvider && !wallet.isMonadTestnet && (
+            <button className="mini-chip-btn" onClick={handleSwitchNetwork} disabled={netBusy}>
+              + Add Chain
+            </button>
+          )}
+          <a
+            href={MONAD_TESTNET.faucetUrl}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mini-chip-link"
+          >
+            ◈ MON Faucet ↗
+          </a>
+          <a
+            href={MONAD_TESTNET.blockExplorerUrls[0]}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="mini-chip-link"
+          >
+            Monadscan ↗
+          </a>
+        </div>
       </div>
 
-      <div className="card" style={{ padding: '10px 14px' }}>
-        <div className="fair-strip">
-          <span className="pill">100% skill-based</span>
-          <span className="pill">Free to play</span>
-          <span className="pill">No gambling</span>
-          <span className="pill">Skins are cosmetic only</span>
+      {/* Vibrant Monad Hero Showcase */}
+      <section className="hero-banner">
+        <div className="hero-copy">
+          <div className="hero-kicker">⚡ POWERED BY MONAD TESTNET</div>
+          <h1 className="hero-title">
+            Absurd Cats. <br />
+            <span>Pure Arcade Skill.</span>
+          </h1>
+          <p className="hero-desc">
+            Zero pay-to-win. Pounce, stack, swat, and dash across 5 colorful mini-games, sign
+            leaderboard scores with your Monad wallet, and flex rare cat outfits in <strong>MON</strong>.
+          </p>
+          <div className="hero-actions">
+            <button className="hero-play-btn" onClick={() => setActive('chick')}>
+              ▶ Play MonCat Now
+            </button>
+            <button
+              className="name-bar"
+              onClick={() => {
+                setNameDraft(save.name || '')
+                setNameOpen(true)
+              }}
+            >
+              <span className="monad-diamond">✦</span>
+              {save.name ? (
+                <span>
+                  <strong>{save.name}</strong>
+                  {nameClaim ? ' ✓' : ''} · Edit
+                </span>
+              ) : (
+                <span>Set Player Name</span>
+              )}
+            </button>
+          </div>
         </div>
-      </div>
+        <div className="hero-mascot-wrap" onClick={() => setActive('chick')} title="Click to play MonCat!">
+          <div className="hero-glow-orb" />
+          <img src={catHeroImg} alt="MonHouse Absurd Cat Mascot" className="hero-cat-img" />
+          <div className="hero-score-badge">★ Total Best: {totalBest}</div>
+        </div>
+      </section>
 
-      <div className="card">
-        <h3>Play</h3>
-        <div className="games-list">
+      {nameModal}
+
+      {/* 5 Sharp Colorful Mini-Games Grid */}
+      <section className="section">
+        <div className="section-head">
+          <h2>◈ Choose Your Game</h2>
+          <span className="hint">5 Vibrant Arcade Modes · Free to Play</span>
+        </div>
+        <div className="games">
           {GAMES.map((g) => (
-            <div className="game-card" key={g.id}>
-              <GameThumb
-                kind={g.id}
-                skin={g.id === 'chick' || g.id === 'rush' || g.id === 'slice' || g.id === 'dash' ? chickSkin : g.id === 'stack' ? stackSkin : undefined}
-                dartSkin={dartSkin}
-              />
+            <button
+              key={g.id}
+              className="game-card"
+              style={{ '--accent': g.accent }}
+              onClick={() => setActive(g.id)}
+            >
+              <div className="game-thumb-wrap">
+                <img src={g.thumb} alt={g.name} className="game-thumb" />
+                <span className="game-badge">{g.badge}</span>
+              </div>
               <div className="game-info">
-                <div className="name">{g.name}</div>
-                <div className="blurb">{g.blurb}</div>
-                <div className="game-foot">
-                 <span className="best-chip">
-                    best <b>{bests[g.id]}</b>
-                  </span>
-                  <button className="btn primary small" onClick={() => setView(g.id)}>
-                    Play
-                  </button>
+                <div className="game-name">{g.name}</div>
+                <div className="game-tag">{g.tag}</div>
+                <div className="game-best">
+                  Best Score: <strong>{save.best[g.id] || 0}</strong>
                 </div>
               </div>
-            </div>
+              <div className="game-play">Play ▶</div>
+            </button>
           ))}
         </div>
-      </div>
+      </section>
 
-      <CupCard tick={lbTick} />
+      {/* MonHouse Cup on Monad Testnet */}
+      <section className="section">
+        <div className="section-head">
+          <h2>★ MonHouse Cup · Monad Testnet</h2>
+          <span className="hint">
+            {cup?.pool?.paused
+              ? 'Paused'
+              : cup
+                ? `${cup.period.id} · ${cup.period.daysLeft}d left · closes ${cup.period.end} ${cup.period.closeUtc} UTC`
+                : '5-day epochs · MON prizes'}
+          </span>
+        </div>
+        <div className="cup-card">
+          {cup?.pool?.paused ? (
+            <div className="cup-banner">
+              <div>
+                <div className="cup-pool">CUP PAUSED</div>
+                <div className="cup-sub">
+                  Standings from <strong>{cup?.board?.period || 'last epoch'}</strong> remain live
+                  below while the next MON pool is prepared.
+                </div>
+              </div>
+              <div className="cup-split">
+                <span>#1 —</span>
+                <span>#2 —</span>
+                <span>#3 —</span>
+              </div>
+            </div>
+          ) : (
+            <div className="cup-banner">
+              <div>
+                <div className="cup-pool">
+                  {(cup?.pool?.perGameMon ?? 5) * GAMES.length} MON Prize Pool
+                </div>
+                <div className="cup-sub">
+                  Free entry · {cup?.pool?.perGameMon ?? 5} MON per game · Top 3 split 50 / 30 / 20%
+                  · EIP-191 wallet-signed scores
+                </div>
+              </div>
+              <div className="cup-split">
+                <span>#1 · {((cup?.pool?.perGameMon ?? 5) * 0.5).toFixed(1)} MON</span>
+                <span>#2 · {((cup?.pool?.perGameMon ?? 5) * 0.3).toFixed(1)} MON</span>
+                <span>#3 · {((cup?.pool?.perGameMon ?? 5) * 0.2).toFixed(1)} MON</span>
+              </div>
+            </div>
+          )}
 
-      <div className="card">
-        <h3>NIM shop — cosmetics only</h3>
-        {SKIN_GROUPS.map((group) => (
-          <div key={group.id}>
-            <div className="skin-group-label">{group.label}</div>
-            {group.skins.map((skin) => {
-              const isOwned = owned[group.id]?.includes(skin.id)
-              const isSelected = sel[group.id] === skin.id
-              const isBusy = busy === group.id + ':' + skin.id
+          <div className="cup-tabs">
+            {GAMES.map((g) => (
+              <button
+                key={g.id}
+                className={`chip ${cupTab === g.id ? 'active' : ''}`}
+                onClick={() => setCupTab(g.id)}
+              >
+                {g.name.replace('Mon', '')}
+              </button>
+            ))}
+          </div>
+
+          {(() => {
+            const rows = cup?.leaders?.[cupTab] || []
+            const paid = cup?.payouts?.[cupTab] || {}
+            const perGame = cup?.pool?.perGameMon ?? 5
+            const prizes = [perGame * 0.5, perGame * 0.3, perGame * 0.2]
+            if (!cup) return <div className="cheer-empty">Loading MonHouse Cup standings…</div>
+            if (rows.length === 0) {
               return (
-                <div className="skin-row" key={skin.id}>
-                  <SkinThumb group={group.id} skin={skin} />
-                  <div className="skin-name">
-                    {skin.name}
-                    <small>cosmetic only · no gameplay effect</small>
+                <div className="cheer-empty">
+                  No signed scores yet for this game — play a round and tap{' '}
+                  <strong>Enter MonHouse Cup</strong> on Game Over!
+                </div>
+              )
+            }
+            return (
+              <div className="cup-board">
+                {rows.map((e, i) => {
+                  const rank = i + 1
+                  const mine = e.device === deviceId.current
+                  const tx = paid[String(rank)]
+                  return (
+                    <div key={e.device + i} className={`cup-row ${mine ? 'mine' : ''}`}>
+                      <span className={`cup-rank r${rank <= 3 ? rank : 0}`}>#{rank}</span>
+                      <span className="cup-who">
+                        <strong>{e.name}</strong>
+                        {e.address && (
+                          <a
+                            href={explorerAddrUrl(e.address)}
+                            target="_blank"
+                            rel="noopener noreferrer"
+                            className="cup-addr link"
+                          >
+                            {shortAddr(e.address)} ↗
+                          </a>
+                        )}
+                      </span>
+                      <span className="cup-pts">{e.score}</span>
+                      {rank <= 3 && (
+                        <span className={`cup-prize ${tx ? 'paid' : ''}`}>
+                          {tx ? (
+                            <a
+                              href={explorerTxUrl(tx)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="cup-txlink"
+                            >
+                              paid ✓
+                            </a>
+                          ) : (
+                            `${prizes[i].toFixed(1)} MON`
+                          )}
+                        </span>
+                      )}
+                    </div>
+                  )
+                })}
+              </div>
+            )
+          })()}
+
+          <div className="cup-foot">
+            House Wallet (Monad Testnet):{' '}
+            <a
+              href={explorerAddrUrl(cup?.pool?.wallet || HOUSE_ADDRESS)}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="cup-txlink"
+            >
+              <code>{shortAddr(cup?.pool?.wallet || HOUSE_ADDRESS)}</code> ↗
+            </a>{' '}
+            · Play any game → tap <strong>Enter MonHouse Cup</strong> on Game Over.
+          </div>
+        </div>
+      </section>
+
+      {/* Cosmetic Skins Shop in MON */}
+      <section className="section">
+        <div className="section-head">
+          <h2>✦ Absurd Cat Outfits & Skins</h2>
+          <span className="hint">100% Cosmetic · Paid in Testnet MON</span>
+        </div>
+        {SKIN_GROUPS.map((grp) => (
+          <div key={grp.id} className="skin-group">
+            <div className="skin-group-label">{grp.label}</div>
+            <div className="skins">
+              {grp.skins.map((s) => {
+                const owned = save.owned[grp.id]?.includes(s.id)
+                const equipped = save.equipped[grp.id] === s.id
+                const loading = busySkin === `${grp.id}:${s.id}`
+                return (
+                  <button
+                    key={s.id}
+                    className={`skin-card ${equipped ? 'equipped' : ''}`}
+                    disabled={loading}
+                    onClick={() => buyOrEquip(grp.id, s)}
+                  >
+                    <SkinThumb groupId={grp.id} skin={s} />
+                    <div className="skin-name">{s.name}</div>
+                    <div className="skin-cta">
+                      {loading
+                        ? 'Sending MON…'
+                        : equipped
+                          ? 'Equipped ✓'
+                          : owned
+                            ? 'Equip'
+                            : fmtMon(s.price)}
+                    </div>
+                  </button>
+                )
+              })}
+            </div>
+          </div>
+        ))}
+      </section>
+
+      {/* Cheer the House in MON */}
+      <section className="section">
+        <div className="section-head">
+          <h2>♥ Cheer the House</h2>
+          <span className="hint">
+            {cheerLive ? 'Live on-chain Monad Testnet board' : 'Tip MON & leave a message'}
+          </span>
+        </div>
+        <div className="cheer-card">
+          <div className="cheer-amounts">
+            {CHEER_AMOUNTS.map((v) => (
+              <button
+                key={v}
+                type="button"
+                className={`chip ${cheerAmt === v ? 'active' : ''}`}
+                onClick={() => setCheerAmt(v)}
+              >
+                {fmtMon(v)}
+              </button>
+            ))}
+          </div>
+          <div className="cheer-presets">
+            {CHEER_PRESETS.map((p) => (
+              <button key={p} type="button" className="preset" onClick={() => setCheerMsg(p)}>
+                {p}
+              </button>
+            ))}
+          </div>
+          <div className="cheer-row">
+            <input
+              className="cheer-input"
+              type="text"
+              maxLength={60}
+              placeholder="Say gmonad to the players…"
+              value={cheerMsg}
+              onChange={(e) => setCheerMsg(e.target.value)}
+              onKeyDown={(e) => e.key === 'Enter' && sendCheer()}
+            />
+            <button className="btn primary cheer-btn" disabled={cheerBusy} onClick={sendCheer}>
+              {cheerBusy ? 'Sending…' : `Cheer ${fmtMon(cheerAmt)}`}
+            </button>
+          </div>
+        </div>
+
+        {cheers.length > 0 && (
+          <div className="cheer-wall">
+            {cheers.slice(0, 12).map((c) => {
+              const isRealTx = c.txHash && String(c.txHash).startsWith('0x') && c.txHash.length >= 42
+              return (
+                <div key={c.id} className="cheer-item">
+                  <span className="cheer-badge">{fmtMon(c.value)}</span>
+                  <div className="cheer-body">
+                    <div className="cheer-meta">
+                      <strong>{c.name}</strong>
+                      <span>
+                        {timeAgo(c.ts)}
+                        {isRealTx && (
+                          <>
+                            {' · '}
+                            <a
+                              href={explorerTxUrl(c.txHash)}
+                              target="_blank"
+                              rel="noopener noreferrer"
+                              className="cup-txlink"
+                            >
+                              tx ↗
+                            </a>
+                          </>
+                        )}
+                      </span>
+                    </div>
+                    {c.message && <div className="cheer-msg">{c.message}</div>}
                   </div>
-                  {isSelected ? (
-                    <span className="badge verified">EQUIPPED</span>
-                  ) : isOwned ? (
-                    <button className="btn small ghost" onClick={() => selectSkin(group.id, skin.id)}>
-                      Equip
-                    </button>
-                  ) : (
-                    <button
-                      className="btn small gold"
-                      disabled={isBusy || busy !== null}
-                      onClick={() => buySkin(group.id, skin)}
-                    >
-                      {isBusy ? 'Sending…' : skin.price === 0 ? 'Free' : fmtNim(skin.price)}
-                    </button>
-                  )}
                 </div>
               )
             })}
           </div>
-        ))}
-        <p className="shop-note">
-          Every purchase is a real NIM payment through Nimiq Pay, with a note attached on-chain.
-          Replace nothing, win nothing — cosmetics never affect gameplay.
-        </p>
-        {lastTx && <div className="tx-line">{lastTx}</div>}
-      </div>
-
-      <div className="card">
-        <h3>Cheer the house · tip in NIM</h3>
-        <input
-          className="cheer-msg"
-          placeholder="Add a message (attached to the payment)"
-          value={cheerMsg}
-          maxLength={60}
-          onChange={(e) => setCheerMsg(e.target.value)}
-        />
-        <div className="cheer-amounts">
-          {[0.01, 0.05, 0.1].map((a) => (
-            <button
-              key={a}
-              className="btn gold small"
-              disabled={!connected || busy !== null}
-              onClick={() => cheer(a)}
-            >
-              {busy === 'cheer' + a ? 'Sending…' : fmtNim(a * LUNA_PER_NIM)}
-            </button>
-          ))}
-        </div>
-        <div className="cheer-note">
-          Cheers are NIM payments with your message attached on-chain, sent to the NimHouse community
-          address{wallet?.mode === 'demo' ? ' (simulated in demo mode)' : ''}. It is a tip, not an
-          entry fee — nobody pays to play, ever.
-        </div>
-        <CheerBoard tick={cheerTick} />
-      </div>
-
-      <div className="card">
-        <h3>
-          Leaderboard{' '}
-          <span style={{ letterSpacing: 0, textTransform: 'none', fontWeight: 400 }}>
-            (this device · always on, prize or no prize)
-          </span>
-        </h3>
-        <div className="lb-tabs">
-          {GAMES.map((g) => (
-            <button key={g.id} className={`lb-tab ${lbTab === g.id ? 'on' : ''}`} onClick={() => setLbTab(g.id)}>
-              {g.lbLabel}
-            </button>
-          ))}
-        </div>
-        {lb.length === 0 ? (
-          <div className="lb-empty">No runs yet — be the first on the board.</div>
-        ) : (
-          lb.map((e, i) => (
-            <div className="lb-row" key={e.id}>
-              <div className="lb-rank">{i + 1}</div>
-              <div className="lb-name">
-                {e.name} {e.verified && <span className="badge verified">✓</span>}
-              </div>
-              <div className="lb-score">{e.score}</div>
-            </div>
-          ))
         )}
-      </div>
+      </section>
 
-      <div className="footer">MADE BY SASAM</div>
+      <footer className="foot">
+        MonHouse · Built on <strong>Monad Testnet (Chain ID 10143)</strong> · Pure skill, cosmetic
+        MON skins only ✦
+      </footer>
 
-      {menuOpen && (
-        <MenuPanel
-          wallet={wallet}
-          connected={connected}
-          connecting={connecting}
-          connectErr={connectErr}
-          chain={chain}
-          accounts={accounts}
-          bests={bests}
-          cupHistory={cupHistory}
-          claim={claim}
-          claimBusy={claimBusy}
-          claimEditing={claimEditing}
-          draftName={draftName}
-          onDraftName={setDraftName}
-          onClaim={submitClaim}
-          onClaimEdit={() => {
-            setDraftName(claim?.name || player)
-            setClaimEditing(true)
-          }}
-          onClaimCancel={() => setClaimEditing(false)}
-          onConnect={connect}
-          onDisconnect={disconnect}
-          onRefreshChain={refreshChain}
-          onClose={() => setMenuOpen(false)}
-        />
-      )}
-
-      {toast && <div className={`toast ${toast.err ? 'err' : ''}`}>{toast.msg}</div>}
+      {toast && <div className="toast">{toast}</div>}
     </div>
   )
 }
-

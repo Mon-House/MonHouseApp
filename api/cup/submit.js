@@ -1,21 +1,7 @@
 /**
- * POST /api/cup/submit — enter the current Cup with a wallet-signed score.
+ * POST /api/cup/submit — enter the current MonHouse Cup with a Monad Testnet wallet-signed score.
  *
- * Body: { game, period, score, name, device, address, message, publicKey, signature }
- *
- * Anti-fraud (documented trust model):
- *  1. The message is verified as a real ed25519 wallet signature (the holder
- *     of that keypair must have approved the claim).
- *  2. One entry per device AND per wallet public key, per game per cup period
- *     (a changed username or a second device with the same wallet does not
- *     create a second rank).
- *  3. Highest score per identity wins (replays are free); the display name
- *     always follows the latest submission.
- *
- * Signature scheme (official Nimiq Keyguard "sign message", see
- * nimiq.github.io/hub/api-reference/sign-message):
- *   sign( sha256( "\x16Nimiq Signed Message:\n" + String(message.length) + message ) )
- * Raw-message and keccak256 variants are also accepted for robustness.
+ * Body: { game, period, score, name, device, address, message, publicKey?, signature }
  */
 import { writeCup, readJsonFile } from '../lib/store.js'
 import { verifyWalletSignature } from '../lib/verify.js'
@@ -37,12 +23,7 @@ export default async function handler(req, res) {
     if (!GAMES.includes(game)) return bad('unknown game')
     if (!/^P\d+$/.test(period || '')) return bad('bad period')
     if (period !== cupPeriod().id) return bad('cup period closed')
-    // Close guards (announced publicly in the ledger):
-    //  1. pool.closedPeriods maps each closed cup to its close time — any
-    //     submission to one of them is rejected (covers the gap between an
-    //     early close and the next grid period, e.g. P6903 paid at 07:00
-    //     UTC while its grid window runs to 16:00 UTC).
-    //  2. pool.closeAt is the hard deadline of the next/current period.
+
     try {
       const cupData = await readJsonFile('data/cup.json')
       if (cupData.pool?.closedPeriods?.[period])
@@ -55,10 +36,12 @@ export default async function handler(req, res) {
     } catch {
       /* no closeAt set */
     }
+
     const s = Math.floor(Number(score))
     if (!Number.isFinite(s) || s < 0 || s > 1_000_000) return bad('bad score')
     if (!/^[0-9a-f]{64}$/i.test(device || '')) return bad('bad device id')
-    if (!publicKey || !signature || typeof message !== 'string') return bad('missing signature')
+    const claimedAddr = String(address || publicKey || '').trim().toLowerCase()
+    if (!claimedAddr || !signature || typeof message !== 'string') return bad('missing signature')
     if (
       !message.includes(`score=${s}`) ||
       !message.includes(`game=${game}`) ||
@@ -66,41 +49,37 @@ export default async function handler(req, res) {
     )
       return bad('message/score mismatch')
 
-    // Verify the ed25519 signature (official Nimiq Keyguard scheme, with
-    // raw-message & keccak256 fallbacks — see lib/verify.js).
-    const v = verifyWalletSignature(message, publicKey, signature)
+    const v = verifyWalletSignature(message, claimedAddr, signature)
     if (!v.ok) return bad(v.error)
 
-    const pubHex = String(publicKey).replace(/^0x/i, '').toLowerCase()
+    const addrNorm = v.address
 
-    // Display name: prefer the wallet-claimed name (data/names.json) so the
-    // leaderboard identity can't be faked from the client.
     let claimedName = ''
     try {
       const names = await readJsonFile('data/names.json')
       claimedName = names.names?.[String(device).toLowerCase()]?.name || ''
     } catch {
-      /* names store unavailable — fall back to submitted name below */
+      /* names store unavailable — fall back to submitted name */
     }
 
     const next = await writeCup((data) => {
+      data.entries = data.entries || {}
       const byPeriod = (data.entries[game] = data.entries[game] || {})
       const list = byPeriod[period] || (byPeriod[period] = [])
-      const i = list.findIndex((e) => e.device === device || (pubHex && e.pub === pubHex))
+      const i = list.findIndex(
+        (e) => e.device === device || (addrNorm && (e.pub === addrNorm || e.address?.toLowerCase() === addrNorm))
+      )
       const entry = {
         device,
         name: claimedName || String(name || 'Anonymous').slice(0, 24),
         score: s,
-        address: String(address || '').slice(0, 48),
-        pub: pubHex,
+        address: addrNorm,
+        pub: addrNorm,
         ts: Date.now(),
       }
       if (i >= 0) {
         const existing = list[i]
-        // Same wallet key, different device = identity evasion attempt.
         if (existing.device !== device) throw new Error('cup-identity-blocked')
-        // Same identity (device + wallet): best score wins, display name
-        // always follows the latest submission (rank is preserved).
         list[i] = {
           ...existing,
           name: entry.name,
@@ -117,12 +96,12 @@ export default async function handler(req, res) {
 
     const list = next.entries[game][period]
     const top = [...list].sort((a, b) => b.score - a.score)
-    const rank = top.findIndex((e) => e.device === device || (pubHex && e.pub === pubHex)) + 1
-    const mine = list.find((e) => e.device === device || (pubHex && e.pub === pubHex))
+    const rank = top.findIndex((e) => e.device === device || (addrNorm && e.pub === addrNorm)) + 1
+    const mine = list.find((e) => e.device === device || (addrNorm && e.pub === addrNorm))
     res.json({ ok: true, rank, score: mine?.score ?? s, period })
   } catch (e) {
     if (e.message === 'cup-identity-blocked')
-      return bad('one entry per wallet — this wallet already entered the cup (username changes keep your rank)')
+      return bad('one entry per wallet — this wallet already entered the cup')
     if (/cup-not-configured|cup-write-conflict/.test(e.message)) {
       res.status(503).json({ ok: false, error: 'cup is being set up — try again shortly' })
     } else {
