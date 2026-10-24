@@ -43,14 +43,14 @@ function timeAgo(ts) {
   return `${Math.floor(s / 86400)}d ago`
 }
 
-const PERIOD5_MS = 5 * 86400 * 1000
-const ANCHOR_START = Date.parse('2026-10-05T16:59:00.000Z')
-const ANCHOR_P = 6911
-
-function cupPeriodId() {
-  const t = Date.now()
-  const delta = Math.max(0, t - ANCHOR_START)
-  return `P${ANCHOR_P + Math.floor(delta / PERIOD5_MS)}`
+function fmtCountdown(msLeft) {
+  const s = Math.max(0, Math.floor(msLeft / 1000))
+  const h = Math.floor(s / 3600)
+  const m = Math.floor((s % 3600) / 60)
+  const sec = s % 60
+  if (h > 0) return `${h}j ${m}m`
+  if (m > 0) return `${m}m ${sec}s`
+  return `${sec}s`
 }
 
 function getDeviceId() {
@@ -188,7 +188,7 @@ export default function App() {
   const [cheerMsg, setCheerMsg] = useState('')
   const [cheerBusy, setCheerBusy] = useState(false)
   const [cup, setCup] = useState(null)
-  const [cupTab, setCupTab] = useState('chick')
+  const [nowTick, setNowTick] = useState(Date.now())
   const [nameOpen, setNameOpen] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
   const [nameClaim, setNameClaim] = useState(null)
@@ -232,6 +232,12 @@ export default function App() {
       alive = false
     }
   }, [loadCup])
+
+  // 30s ticker so the Cup snapshot countdown stays fresh
+  useEffect(() => {
+    const iv = setInterval(() => setNowTick(Date.now()), 30_000)
+    return () => clearInterval(iv)
+  }, [])
 
   const loadCheers = useCallback(async (fresh = false) => {
     try {
@@ -319,7 +325,8 @@ export default function App() {
         setNameOpen(true)
         return { ok: false, error: 'Claim your player name in the popup, then tap Enter Cup again!' }
       }
-      const period = cup?.period?.id || cupPeriodId()
+      const period = cup?.period?.id
+      if (!period) return { ok: false, error: 'Cup standings still loading — try again in a moment' }
       const msg = `MonHouse Cup | game=${gameId} | period=${period} | score=${score} | name=${save.name} | device=${deviceId.current}`
       const sig = await wallet.sign(msg)
       if (!sig.ok) return { ok: false, error: sig.error || 'Signature cancelled' }
@@ -808,8 +815,8 @@ export default function App() {
             {cup?.pool?.paused
               ? 'Paused'
               : cup
-                ? `${cup.period.id} · ${cup.period.daysLeft}d left · closes ${cup.period.end} ${cup.period.closeUtc} UTC`
-                : '5-day epochs · MON prizes'}
+                ? `${cup.period.id} · Snapshot ${cup.pool?.closeLabel || '19:45 WIB'}`
+                : '600 MON prize pool'}
           </span>
         </div>
         <div className="cup-card">
@@ -818,8 +825,8 @@ export default function App() {
               <div>
                 <div className="cup-pool">CUP PAUSED</div>
                 <div className="cup-sub">
-                  Standings from <strong>{cup?.board?.period || 'last epoch'}</strong> remain live
-                  below while the next MON pool is prepared.
+                  Standings from <strong>{cup?.board?.period || 'cup terakhir'}</strong> tetap tampil
+                  di bawah sementara pool MON berikutnya disiapkan.
                 </div>
               </div>
               <div className="cup-split">
@@ -831,45 +838,45 @@ export default function App() {
           ) : (
             <div className="cup-banner">
               <div>
-                <div className="cup-pool">
-                  {(cup?.pool?.perGameMon ?? 5) * GAMES.length} MON Prize Pool
-                </div>
+                <div className="cup-pool">{cup?.pool?.totalMon ?? 600} MON Prize Pool</div>
                 <div className="cup-sub">
-                  Free entry · {cup?.pool?.perGameMon ?? 5} MON per game · Top 3 split 50 / 30 / 20%
-                  · EIP-191 wallet-signed scores
+                  Snapshot pemenang: <strong>{cup?.pool?.closeLabel || 'Hari ini · 19:45 WIB'}</strong>
+                  {' · '}
+                  {cup?.pool?.rule || 'Skor tertinggi lintas semua game'} · EIP-191 wallet-signed
                 </div>
+                {(() => {
+                  const closeMs = Date.parse(cup?.pool?.closeAt || '')
+                  if (!Number.isFinite(closeMs)) return null
+                  return closeMs > nowTick ? (
+                    <div className="cup-countdown">
+                      ⏳ Snapshot dalam {fmtCountdown(closeMs - nowTick)}
+                    </div>
+                  ) : (
+                    <div className="cup-countdown done">📸 Snapshot diambil — pemenang dibekukan!</div>
+                  )
+                })()}
               </div>
               <div className="cup-split">
-                <span>#1 · {((cup?.pool?.perGameMon ?? 5) * 0.5).toFixed(1)} MON</span>
-                <span>#2 · {((cup?.pool?.perGameMon ?? 5) * 0.3).toFixed(1)} MON</span>
-                <span>#3 · {((cup?.pool?.perGameMon ?? 5) * 0.2).toFixed(1)} MON</span>
+                {(cup?.pool?.tiersMon || [180, 150, 120, 90, 60]).map((mon, i) => (
+                  <span key={i}>
+                    #{i + 1} · {mon} MON
+                  </span>
+                ))}
               </div>
             </div>
           )}
 
-          <div className="cup-tabs">
-            {GAMES.map((g) => (
-              <button
-                key={g.id}
-                className={`chip ${cupTab === g.id ? 'active' : ''}`}
-                onClick={() => setCupTab(g.id)}
-              >
-                {g.name.replace('Mon', '')}
-              </button>
-            ))}
-          </div>
-
           {(() => {
-            const rows = cup?.leaders?.[cupTab] || []
-            const paid = cup?.payouts?.[cupTab] || {}
-            const perGame = cup?.pool?.perGameMon ?? 5
-            const prizes = [perGame * 0.5, perGame * 0.3, perGame * 0.2]
+            const rows = cup?.overall || []
+            const tiers = cup?.pool?.tiersMon || [180, 150, 120, 90, 60]
+            const txs = cup?.payouts?.txs || {}
             if (!cup) return <div className="cheer-empty">Loading MonHouse Cup standings…</div>
             if (rows.length === 0) {
               return (
                 <div className="cheer-empty">
-                  No signed scores yet for this game — play a round and tap{' '}
-                  <strong>Enter MonHouse Cup</strong> on Game Over!
+                  Belum ada skor terdaftar — mainkan game apa pun, lalu tap{' '}
+                  <strong>Enter MonHouse Cup</strong> di Game Over. Peringkat dihitung dari skor
+                  tertinggimu lintas semua game!
                 </div>
               )
             }
@@ -878,9 +885,12 @@ export default function App() {
                 {rows.map((e, i) => {
                   const rank = i + 1
                   const mine = e.device === deviceId.current
-                  const tx = paid[String(rank)]
+                  const tx = txs[String(rank)]
                   return (
-                    <div key={e.device + i} className={`cup-row ${mine ? 'mine' : ''}`}>
+                    <div
+                      key={(e.address || e.device) + i}
+                      className={`cup-row ${mine ? 'mine' : ''}`}
+                    >
                       <span className={`cup-rank r${rank <= 3 ? rank : 0}`}>#{rank}</span>
                       <span className="cup-who">
                         <strong>{e.name}</strong>
@@ -895,8 +905,9 @@ export default function App() {
                           </a>
                         )}
                       </span>
+                      <span className="cup-game">{cup?.gameLabels?.[e.game] || 'MonCat'}</span>
                       <span className="cup-pts">{e.score}</span>
-                      {rank <= 3 && (
+                      {rank <= tiers.length && (
                         <span className={`cup-prize ${tx ? 'paid' : ''}`}>
                           {tx ? (
                             <a
@@ -908,7 +919,7 @@ export default function App() {
                               paid ✓
                             </a>
                           ) : (
-                            `${prizes[i].toFixed(1)} MON`
+                            `${tiers[i]} MON`
                           )}
                         </span>
                       )}
@@ -920,7 +931,7 @@ export default function App() {
           })()}
 
           <div className="cup-foot">
-            House Wallet (Monad Mainnet):{' '}
+            Distribusi otomatis oleh wallet MonHouse{' '}
             <a
               href={explorerAddrUrl(cup?.pool?.wallet || HOUSE_ADDRESS)}
               target="_blank"

@@ -31,3 +31,22 @@ VITE_MONAD_RPC=https://rpc.monad.xyz
 npm install
 npm run dev
 ```
+
+## 🏆 MonHouse Cup Rules (v3 — Snapshot Cup)
+
+| Rule | Value |
+| --- | --- |
+| **Snapshot pemenang** | Hari ini · **19:45 WIB** (12:45 UTC) |
+| **Total hadiah** | **600 MON** |
+| **Hadiah per juara** | #1 **180** · #2 **150** · #3 **120** · #4 **90** · #5 **60** MON |
+| **Basis peringkat** | Skor tertinggi pemain **lintas semua game** (best single-game score) |
+| **Distribusi** | Otomatis oleh wallet MonHouse `0xe5b41b1e42580ddb14F277578D5f92Fc091DAD1d` |
+
+Setelah jam 19:45 WIB, submit skor otomatis ditolak ("cup closed — snapshot taken")
+dan papan pemenang terkunci. Distribusi hadiah dijalankan dari wallet MonHouse:
+
+```bash
+node scripts/payout.mjs --dry-run          # lihat pemenang & hadiah
+node scripts/payout.mjs --auto             # kirim 180/150/120/90/60 MON otomatis
+                                          # (butuh MONHOUSE_PAYOUT_KEY = private key wallet MonHouse)
+```

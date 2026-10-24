@@ -1,7 +1,7 @@
 {
   "name": "monhouse",
   "private": true,
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "MonHouse — 5 absurd cat skill-arcade mini-games built on Monad Mainnet (Chain ID 143).",
   "type": "module",
   "engines": {

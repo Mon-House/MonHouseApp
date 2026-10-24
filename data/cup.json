@@ -1,99 +1,19 @@
 {
-  "version": 2,
+  "version": 3,
   "pool": {
-    "perGameMon": 5,
-    "splitPct": [50, 30, 20],
+    "totalMon": 600,
+    "tiersMon": [180, 150, 120, 90, 60],
+    "splitPct": [30, 25, 20, 15, 10],
     "wallet": "0xe5b41b1e42580ddb14F277578D5f92Fc091DAD1d",
     "network": "Monad Mainnet (Chain ID 143)",
-    "note": "Free to play on Monad Mainnet! Every 5-day MonHouse Cup stakes 5 MON per game (25 MON total across all 5 games). Top 3 scores in each game take 50% / 30% / 20% (2.5 / 1.5 / 1.0 MON), verified via EIP-191 personal_sign wallet signatures.",
+    "closeAt": "2026-10-24T12:45:00.000Z",
+    "closeLabel": "Hari ini · 19:45 WIB",
+    "rule": "Skor tertinggi lintas semua game",
+    "autoPayout": true,
+    "paused": false,
     "closedPeriods": {},
-    "paused": false
+    "note": "Free to play on Monad Mainnet. Snapshot pemenang diambil pada closeAt (19:45 WIB). Peringkat dihitung dari skor tertinggi pemain lintas SEMUA game. Top 5 berbagi 600 MON (180 / 150 / 120 / 90 / 60), didistribusikan otomatis oleh wallet MonHouse."
   },
-  "entries": {
-    "chick": {
-      "P6914": [
-        {
-          "device": "1111111111111111111111111111111111111111111111111111111111111111",
-          "name": "GmonadCat",
-          "score": 42,
-          "address": "0x71c95911e9a5d330f4d621842ec243ee1343292e",
-          "pub": "0x71c95911e9a5d330f4d621842ec243ee1343292e",
-          "ts": 1792720000000
-        },
-        {
-          "device": "2222222222222222222222222222222222222222222222222222222222222222",
-          "name": "NadsPurr",
-          "score": 27,
-          "address": "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
-          "pub": "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
-          "ts": 1792723600000
-        },
-        {
-          "device": "3333333333333333333333333333333333333333333333333333333333333333",
-          "name": "MeowValidator",
-          "score": 15,
-          "address": "0x90f79bf6eb2c4f870365e785982e1f101e93b906",
-          "pub": "0x90f79bf6eb2c4f870365e785982e1f101e93b906",
-          "ts": 1792727200000
-        }
-      ]
-    },
-    "stack": {
-      "P6914": [
-        {
-          "device": "2222222222222222222222222222222222222222222222222222222222222222",
-          "name": "NadsPurr",
-          "score": 38,
-          "address": "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
-          "pub": "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
-          "ts": 1792723900000
-        },
-        {
-          "device": "1111111111111111111111111111111111111111111111111111111111111111",
-          "name": "GmonadCat",
-          "score": 24,
-          "address": "0x71c95911e9a5d330f4d621842ec243ee1343292e",
-          "pub": "0x71c95911e9a5d330f4d621842ec243ee1343292e",
-          "ts": 1792724200000
-        }
-      ]
-    },
-    "rush": {
-      "P6914": [
-        {
-          "device": "3333333333333333333333333333333333333333333333333333333333333333",
-          "name": "MeowValidator",
-          "score": 64,
-          "address": "0x90f79bf6eb2c4f870365e785982e1f101e93b906",
-          "pub": "0x90f79bf6eb2c4f870365e785982e1f101e93b906",
-          "ts": 1792725100000
-        }
-      ]
-    },
-    "swat": {
-      "P6914": [
-        {
-          "device": "2222222222222222222222222222222222222222222222222222222222222222",
-          "name": "NadsPurr",
-          "score": 52,
-          "address": "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
-          "pub": "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
-          "ts": 1792725400000
-        }
-      ]
-    },
-    "dash": {
-      "P6914": [
-        {
-          "device": "2222222222222222222222222222222222222222222222222222222222222222",
-          "name": "NadsPurr",
-          "score": 215,
-          "address": "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
-          "pub": "0x3c44cdddb6a900fa2b585dd299e03d12fa4293bc",
-          "ts": 1792726000000
-        }
-      ]
-    }
-  },
+  "entries": {},
   "payouts": {}
 }

@@ -22,19 +22,23 @@ export default async function handler(req, res) {
 
     if (!GAMES.includes(game)) return bad('unknown game')
     if (!/^P\d+$/.test(period || '')) return bad('bad period')
-    if (period !== cupPeriod().id) return bad('cup period closed')
 
+    let cupData
     try {
-      const cupData = await readJsonFile('data/cup.json')
+      cupData = await readJsonFile('data/cup.json')
+    } catch {
+      cupData = null
+    }
+    if (cupData) {
+      const expected = cupPeriod(cupData.pool?.closeAt)
+      if (period !== expected.id) return bad('cup period mismatch')
       if (cupData.pool?.closedPeriods?.[period])
         return bad('this cup closed early — payout in progress, the next cup opens soon')
       if (cupData.pool?.paused)
         return bad('the cup is PAUSED — the next cup will be announced by the house')
       const closeAt = Date.parse(cupData.pool?.closeAt || '')
       if (Number.isFinite(closeAt) && Date.now() >= closeAt)
-        return bad('this cup is closed — payout in progress, the next cup opens soon')
-    } catch {
-      /* no closeAt set */
+        return bad('cup closed — snapshot taken at 19:45 WIB, winners are frozen')
     }
 
     const s = Math.floor(Number(score))

@@ -1,28 +1,45 @@
 /**
  * GET /api/cup — current MonHouse Cup state on Monad Mainnet.
- * Returns the active period, MON pool config, per-game top-10, and payouts.
+ *
+ * Cup rules (v3 — snapshot cup):
+ *  - One-day event: the winner snapshot is taken at pool.closeAt (19:45 WIB).
+ *  - Total prize 600 MON, tiers [180, 150, 120, 90, 60] for ranks 1-5.
+ *  - Ranking = each player's HIGHEST score across ALL games.
+ *  - Prizes are distributed automatically by the MonHouse house wallet.
  */
 import { readCup } from './lib/store.js'
 
 export const GAMES = ['chick', 'stack', 'rush', 'swat', 'dash']
 
-const PERIOD5_MS = 5 * 86400 * 1000 // 5-day Monad Cup epochs
-const ANCHOR_START = Date.parse('2026-10-05T16:59:00.000Z')
-const ANCHOR_P = 6911
+export const GAME_LABELS = {
+  chick: 'MonCat',
+  stack: 'MonStack',
+  rush: 'MonRush',
+  swat: 'MonSwat',
+  dash: 'MonDash',
+}
 
-export function cupPeriod(date = new Date()) {
+const DEFAULT_CLOSE_AT = '2026-10-24T12:45:00.000Z'
+const DEFAULT_TIERS = [180, 150, 120, 90, 60]
+const WIB_OFFSET_MS = 7 * 3600 * 1000
+
+/**
+ * Derive the snapshot-cup period from the configured closeAt timestamp.
+ * Period id = `P` + YYYYMMDD of the close time in WIB (Asia/Jakarta).
+ */
+export function cupPeriod(closeAtIso, date = new Date()) {
+  const parsed = Date.parse(closeAtIso)
+  const closeAt = Number.isFinite(parsed) ? parsed : Date.parse(DEFAULT_CLOSE_AT)
   const t = Date.parse(date)
-  const delta = Math.max(0, t - ANCHOR_START)
-  const idx = Math.floor(delta / PERIOD5_MS)
-  const p = ANCHOR_P + idx
-  const start = new Date(ANCHOR_START + idx * PERIOD5_MS)
-  const end = new Date(start.getTime() + PERIOD5_MS)
+  const wibDay = new Date(closeAt + WIB_OFFSET_MS).toISOString().slice(0, 10)
   return {
-    id: `P${p}`,
-    start: start.toISOString().slice(0, 10),
-    end: end.toISOString().slice(0, 10),
-    closeUtc: end.toISOString().slice(11, 16),
-    daysLeft: Math.max(1, Math.ceil((end.getTime() - t) / 86400000)),
+    id: `P${wibDay.replace(/-/g, '')}`,
+    start: wibDay,
+    end: wibDay,
+    closeUtc: new Date(closeAt).toISOString().slice(11, 16),
+    closeAt: new Date(closeAt).toISOString(),
+    open: t < closeAt,
+    msLeft: Math.max(0, closeAt - t),
   }
 }
 
@@ -31,7 +48,7 @@ export default async function handler(req, res) {
   res.setHeader('Cache-Control', 'no-store')
   try {
     const data = await readCup()
-    const period = cupPeriod()
+    const period = cupPeriod(data.pool?.closeAt)
 
     const periodsWithEntries = (p) =>
       GAMES.some((g) => (data.entries?.[g]?.[p] || []).length > 0)
@@ -48,28 +65,57 @@ export default async function handler(req, res) {
     }
     const boardIsLast = boardPeriod !== period.id
 
+    // Per-game leaders (top 10 each) + unified board:
+    // each player is ranked by their single HIGHEST score across ALL games.
     const leaders = {}
+    const bestByPlayer = new Map()
     for (const g of GAMES) {
-      const list = data.entries?.[g]?.[boardPeriod] || []
-      leaders[g] = [...list].sort((a, b) => b.score - a.score).slice(0, 10)
+      const list = [...(data.entries?.[g]?.[boardPeriod] || [])].sort(
+        (a, b) => b.score - a.score || a.ts - b.ts
+      )
+      leaders[g] = list.slice(0, 10)
+      for (const e of list) {
+        const key = String(e.address || e.device || '').toLowerCase()
+        const cur = bestByPlayer.get(key)
+        if (!cur || e.score > cur.score) bestByPlayer.set(key, { ...e, game: g })
+      }
     }
-    const payouts = {}
-    for (const g of GAMES) {
-      payouts[g] = data.payouts?.[g]?.[boardPeriod] || data.payouts?.[g]?.[period.id] || null
-    }
+    const overall = [...bestByPlayer.values()]
+      .sort((a, b) => b.score - a.score || a.ts - b.ts)
+      .slice(0, 10)
+
+    const tiers =
+      Array.isArray(data.pool?.tiersMon) && data.pool.tiersMon.length
+        ? data.pool.tiersMon.map(Number)
+        : DEFAULT_TIERS
+    const winners = overall.slice(0, tiers.length).map((e, i) => ({
+      ...e,
+      rank: i + 1,
+      prizeMon: tiers[i],
+    }))
+
+    const payouts = data.payouts?.[boardPeriod] || null
+
     res.json({
       ok: true,
       period,
       games: GAMES,
+      gameLabels: GAME_LABELS,
       pool: data.pool,
       leaders,
+      overall,
+      winners,
       payouts,
       board: {
         period: boardPeriod,
         isLast: boardIsLast,
-        paid: GAMES.every((g) => payouts[g]),
+        snapshotTaken: !period.open && !boardIsLast,
+        paid:
+          !!payouts &&
+          winners.length > 0 &&
+          Object.keys(payouts.txs || {}).length >= winners.length,
         note: boardIsLast
-          ? `Showing latest standings from ${boardPeriod} — be the first to sign a score in ${period.id}!`
+          ? `Menampilkan standings final dari ${boardPeriod}.`
           : '',
       },
     })

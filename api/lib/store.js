@@ -15,15 +15,20 @@ const CACHE_TTL = 15_000
 
 const SEEDS = {
   'data/cup.json': () => ({
-    version: 2,
+    version: 3,
     pool: {
-      perGameMon: 5,
-      splitPct: [50, 30, 20],
+      totalMon: 600,
+      tiersMon: [180, 150, 120, 90, 60],
+      splitPct: [30, 25, 20, 15, 10],
       wallet: '0xe5b41b1e42580ddb14F277578D5f92Fc091DAD1d',
       network: 'Monad Mainnet (Chain ID 143)',
-      closedPeriods: {},
+      closeAt: '2026-10-24T12:45:00.000Z',
+      closeLabel: 'Hari ini · 19:45 WIB',
+      rule: 'Skor tertinggi lintas semua game',
+      autoPayout: true,
       paused: false,
-      note: 'Free to play on Monad Mainnet. Top 3 wallet-verified scores per game share the MON prize pool (50 / 30 / 20%).',
+      closedPeriods: {},
+      note: 'Free to play on Monad Mainnet. Snapshot pemenang diambil pada closeAt (19:45 WIB). Peringkat dihitung dari skor tertinggi pemain lintas SEMUA game. Top 5 berbagi 600 MON (180 / 150 / 120 / 90 / 60), didistribusikan otomatis oleh wallet MonHouse.',
     },
     entries: {},
     payouts: {},
