@@ -36,7 +36,7 @@ No downloads. No NFTs to buy. No pay-to-win. Open the site, play, sign, win.
 | 🔍 **Explorer** | [monadscan.com](https://monadscan.com) · [monadvision.com](https://monadvision.com) |
 | 🛠 **Stack** | React 18 · Vite 5 · Canvas 2D · Serverless API · `@noble/curves` + `js-sha3` |
 | 🧪 **Quality** | 21-assertion pre-push smoke suite (`npm test`) |
-| 📄 **License** | MIT (this repo) — forked from the open-source [NimHouse](https://github.com/sasam44/nimhouse) |
+| 📄 **License** | MIT |
 
 ### Why it's different
 
