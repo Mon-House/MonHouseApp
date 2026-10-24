@@ -13,3 +13,4 @@ vercel
 /mascot-*.png
 /preview-*.png
 /qa-*.png
+.env*
