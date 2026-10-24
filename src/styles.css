@@ -1127,6 +1127,28 @@ a {
   font-variant-numeric: tabular-nums;
 }
 
+.cup-verified {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  margin-left: 5px;
+  width: 15px;
+  height: 15px;
+  border-radius: 50%;
+  background: rgba(34, 211, 238, 0.18);
+  color: #67e8f9;
+  font-size: 10px;
+  font-weight: 900;
+  vertical-align: middle;
+  border: 1px solid rgba(34, 211, 238, 0.45);
+}
+
+.cheer-badge.free {
+  background: rgba(34, 211, 238, 0.16);
+  color: #67e8f9;
+  border: 1px solid rgba(34, 211, 238, 0.4);
+}
+
 .cup-prize {
   font-size: 11px;
   font-weight: 800;

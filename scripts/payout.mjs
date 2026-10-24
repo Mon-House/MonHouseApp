@@ -106,9 +106,17 @@ if (plan.length === 0) {
 
 for (const p of plan) {
   const status = p.already ? ` [paid: ${p.already.slice(0, 14)}…]` : ''
+  const unverified = p.address ? '' : '  ⚠ UNVERIFIED — needs "Enter MonHouse Cup" wallet sign to be payable'
   console.log(
-    `  #${p.rank}  ${String(p.mon + ' MON').padStart(9)}  ${p.name.padEnd(16)} score ${String(p.score).padStart(6)} (${GAME_LABELS[p.game] || p.game})  →  ${p.address || 'NO ADDRESS'}${status}`
+    `  #${p.rank}  ${String(p.mon + ' MON').padStart(9)}  ${p.name.padEnd(16)} score ${String(p.score).padStart(6)} (${GAME_LABELS[p.game] || p.game})  →  ${p.address || 'NO ADDRESS'}${status}${unverified}`
   )
+}
+const unverifiedCount = plan.filter((p) => !p.address).length
+if (unverifiedCount > 0) {
+  console.log(
+    `\n  ⚠ ${unverifiedCount} winner(s) above are auto-entries without a wallet signature.`
+  )
+  console.log('  Only wallet-verified entries are paid by --auto; unverified slots are skipped.')
 }
 
 if (DRY_RUN) {

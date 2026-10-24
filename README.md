@@ -75,6 +75,7 @@ automatically from the house wallet.
 | Rule | Value |
 |---|---|
 | **Ranking basis** | Each player's **highest score across ALL games** (one unified board) |
+| **Auto-entry** | Finished games are listed on the leaderboard **instantly** (device-bound). Tap **★ Enter MonHouse Cup** to wallet-verify (✓) and become prize-eligible |
 | **Prize pool (current cup)** | **600 MON** |
 | **Prize tiers** | 🥇 180 · 🥈 150 · 🥉 120 · #4 90 · #5 60 MON |
 | **Distribution** | Automatic, on-chain, from the MonHouse house wallet |

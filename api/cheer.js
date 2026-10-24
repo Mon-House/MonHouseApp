@@ -37,16 +37,18 @@ export default async function handler(req, res) {
       const b = req.body || {}
       const name = String(b.name ?? '').trim()
       const message = cleanMsg(b.message)
-      const value = Math.floor(Number(b.value))
       const rawTx = String(b.txHash ?? '').trim()
+      const free = rawTx === '' // free cheer: no on-chain MON tip, message only
+      const value = free ? 0 : Math.floor(Number(b.value))
       const txHash = rawTx.startsWith('0x') || rawTx.startsWith('demo_') ? rawTx : `0x${rawTx}`
       const device = String(b.device ?? '').toLowerCase()
       const ts = Math.floor(Number(b.ts))
 
       if (!NAME_RE.test(name)) return res.status(400).json({ ok: false, error: 'bad name' })
-      if (!Number.isFinite(value) || value < 1 || value > MAX_VALUE)
+      if (!free && (!Number.isFinite(value) || value < 1 || value > MAX_VALUE))
         return res.status(400).json({ ok: false, error: 'bad value' })
-      if (!TX_RE.test(txHash)) return res.status(400).json({ ok: false, error: 'bad tx hash' })
+      if (!free && !TX_RE.test(txHash))
+        return res.status(400).json({ ok: false, error: 'bad tx hash' })
       if (device && !/^[0-9a-f]{64}$/.test(device))
         return res.status(400).json({ ok: false, error: 'bad device' })
       if (!Number.isFinite(ts) || ts > Date.now() + 60_000)
@@ -54,7 +56,13 @@ export default async function handler(req, res) {
 
       const data = await readJsonFile('data/cheers.json', { fresh: true })
       const cheers = data.cheers || []
-      if (cheers.some((c) => String(c.txHash).toLowerCase() === txHash.toLowerCase()))
+      if (free) {
+        if (!device) return res.status(400).json({ ok: false, error: 'free cheer needs a device id' })
+        const mine = cheers.filter((c) => c.device === device && c.free)
+        const last = mine[mine.length - 1]
+        if (last && Date.now() - Number(last.ts || 0) < 20_000)
+          return res.status(429).json({ ok: false, error: 'too many free cheers — wait a moment' })
+      } else if (cheers.some((c) => String(c.txHash).toLowerCase() === txHash.toLowerCase()))
         return res.status(400).json({ ok: false, error: 'this tx is already on the board' })
 
       const entry = {
@@ -63,13 +71,15 @@ export default async function handler(req, res) {
         message,
         value,
         device: device || '',
-        txHash,
+        free,
+        txHash: free ? '' : txHash,
         ts,
       }
 
       const next = await writeJsonFile('data/cheers.json', (d) => {
         const list = d.cheers || []
-        if (list.some((c) => String(c.txHash).toLowerCase() === txHash.toLowerCase())) return null
+        if (!free && list.some((c) => String(c.txHash).toLowerCase() === txHash.toLowerCase()))
+          return null
         list.push(entry)
         while (list.length > MAX_ENTRIES) list.shift()
         return { ...d, cheers: list }

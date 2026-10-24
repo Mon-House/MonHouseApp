@@ -122,11 +122,17 @@ const cupConfig = JSON.parse(cupBackup)
 const period = cupPeriod(cupConfig.pool?.closeAt).id
 
 try {
-  // ---- Cup v3 rule checks (pure config) ----
+  // ---- Cup v3 rule checks (pure config, derived from closeAt) ----
   const pMeta = cupPeriod(cupConfig.pool?.closeAt)
+  const expectedId =
+    'P' +
+    new Date(Date.parse(cupConfig.pool.closeAt) + 7 * 3600 * 1000)
+      .toISOString()
+      .slice(0, 10)
+      .replace(/-/g, '')
   assert(
-    'Cup period id P20261024 derived from closeAt (19:45 WIB = 12:45 UTC)',
-    pMeta.id === 'P20261024' && pMeta.closeUtc === '12:45'
+    `Cup period id ${expectedId} derived from closeAt (WIB) & closes 12:45 UTC`,
+    pMeta.id === expectedId && pMeta.closeUtc === '12:45'
   )
   assert(
     'Cup pool: 600 MON total, tiers 180/150/120/90/60, house wallet',
@@ -139,14 +145,15 @@ try {
   const closedCup = JSON.parse(cupBackup)
   closedCup.pool.closeAt = '2026-10-24T00:00:00.000Z'
   writeFileSync('data/cup.json', JSON.stringify(closedCup, null, 2))
-  const closedMsg = `MonHouse Cup | game=chick | period=${period} | score=1 | name=QaTester | device=${device}`
+  const closedPeriod = cupPeriod(closedCup.pool.closeAt).id
+  const closedMsg = `MonHouse Cup | game=chick | period=${closedPeriod} | score=1 | name=QaTester | device=${device}`
   const rClosed = mockRes()
   await submitHandler(
     {
       method: 'POST',
       body: {
         game: 'chick',
-        period,
+        period: closedPeriod,
         score: 1,
         name: 'QaTester',
         device,
@@ -261,6 +268,29 @@ try {
     JSON.stringify(winners)
   )
 
+  // ---- Auto-entry (unsigned): listed instantly, marked unverified ----
+  const device2 = 'e'.repeat(64)
+  const rAuto = mockRes()
+  await submitHandler(
+    {
+      method: 'POST',
+      body: { game: 'rush', period, score: 77, name: 'GhostKitty', device: device2 },
+    },
+    rAuto
+  )
+  assert(
+    'POST /api/cup/submit auto-entry (no signature) accepted',
+    rAuto.statusCode === 200 && rAuto.body?.ok
+  )
+  const rCup3 = mockRes()
+  await cupHandler({ method: 'GET', query: {} }, rCup3)
+  const ghost = (rCup3.body?.overall || []).find((e) => e.device === device2)
+  assert(
+    'Auto-entry appears instantly on the unified board as unverified',
+    !!ghost && ghost.score === 77 && ghost.verified === false,
+    JSON.stringify(ghost)
+  )
+
   // ---- POST /api/cheer ----
   const txHash = '0x' + 'a1b2'.repeat(16)
   const rCheer = mockRes()
@@ -290,6 +320,26 @@ try {
     rCheerDup
   )
   assert('POST /api/cheer rejects duplicate txHash', rCheerDup.statusCode === 400)
+
+  // ---- Free cheer (no MON tx) ----
+  const rFree = mockRes()
+  await cheerHandler(
+    {
+      method: 'POST',
+      body: { name: 'QaTester', message: 'free hype!', value: 0, device, ts: Date.now() },
+    },
+    rFree
+  )
+  assert('POST /api/cheer free cheer (no tx) accepted', rFree.statusCode === 200 && rFree.body?.ok)
+  const rFree2 = mockRes()
+  await cheerHandler(
+    {
+      method: 'POST',
+      body: { name: 'QaTester', message: 'spam', value: 0, device, ts: Date.now() },
+    },
+    rFree2
+  )
+  assert('POST /api/cheer free cheer is rate-limited (429)', rFree2.statusCode === 429)
 } finally {
   writeFileSync('data/cup.json', cupBackup)
   writeFileSync('data/names.json', namesBackup)

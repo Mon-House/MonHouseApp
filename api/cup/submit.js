@@ -44,19 +44,27 @@ export default async function handler(req, res) {
     const s = Math.floor(Number(score))
     if (!Number.isFinite(s) || s < 0 || s > 1_000_000) return bad('bad score')
     if (!/^[0-9a-f]{64}$/i.test(device || '')) return bad('bad device id')
-    const claimedAddr = String(address || publicKey || '').trim().toLowerCase()
-    if (!claimedAddr || !signature || typeof message !== 'string') return bad('missing signature')
-    if (
-      !message.includes(`score=${s}`) ||
-      !message.includes(`game=${game}`) ||
-      !message.includes(`period=${period}`)
-    )
-      return bad('message/score mismatch')
 
-    const v = verifyWalletSignature(message, claimedAddr, signature)
-    if (!v.ok) return bad(v.error)
-
-    const addrNorm = v.address
+    // Two entry modes:
+    //  a) AUTO-ENTRY (no signature): provisional, device-bound, listed on the
+    //     leaderboard instantly but NOT prize-eligible until wallet-verified.
+    //  b) WALLET-VERIFIED (EIP-191 signature): prize-eligible, bound to the address.
+    let addrNorm = ''
+    let verified = false
+    if (signature && typeof message === 'string') {
+      const claimedAddr = String(address || publicKey || '').trim().toLowerCase()
+      if (!claimedAddr) return bad('missing address')
+      if (
+        !message.includes(`score=${s}`) ||
+        !message.includes(`game=${game}`) ||
+        !message.includes(`period=${period}`)
+      )
+        return bad('message/score mismatch')
+      const v = verifyWalletSignature(message, claimedAddr, signature)
+      if (!v.ok) return bad(v.error)
+      addrNorm = v.address
+      verified = true
+    }
 
     let claimedName = ''
     try {
@@ -79,6 +87,7 @@ export default async function handler(req, res) {
         score: s,
         address: addrNorm,
         pub: addrNorm,
+        verified,
         ts: Date.now(),
       }
       if (i >= 0) {
@@ -89,6 +98,7 @@ export default async function handler(req, res) {
           name: entry.name,
           address: existing.address || entry.address,
           pub: existing.pub || entry.pub,
+          verified: existing.verified || entry.verified,
           score: Math.max(existing.score, s),
           ts: s > existing.score ? entry.ts : existing.ts,
         }

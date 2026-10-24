@@ -83,7 +83,14 @@ export default function ScoreOverlay({ gameName, score, best, extra, onReplay, c
                   className={`overlay-lb-row ${e.device === cup.myDevice ? 'mine' : ''}`}
                 >
                   <span className="overlay-lb-rank">#{i + 1}</span>
-                  <span className="overlay-lb-name">{e.name}</span>
+                  <span className="overlay-lb-name">
+                    {e.name}
+                    {e.verified ? (
+                      <span className="cup-verified" title="Wallet verified">
+                        ✓
+                      </span>
+                    ) : null}
+                  </span>
                   <span className="overlay-lb-score">{e.score}</span>
                 </div>
               ))

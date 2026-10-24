@@ -190,6 +190,14 @@ export default function App() {
   const [cup, setCup] = useState(null)
   const [nowTick, setNowTick] = useState(Date.now())
   const [lbOpen, setLbOpen] = useState(false)
+  const cupRef = useRef(null)
+  const saveRef = useRef(null)
+  useEffect(() => {
+    cupRef.current = cup
+  }, [cup])
+  useEffect(() => {
+    saveRef.current = save
+  }, [save])
   const [nameOpen, setNameOpen] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
   const [nameClaim, setNameClaim] = useState(null)
@@ -294,12 +302,42 @@ export default function App() {
     }
   }
 
-  const onScore = useCallback((gameId, score) => {
-    setSave((prev) => {
-      if (score <= (prev.best[gameId] || 0)) return prev
-      return { ...prev, best: { ...prev.best, [gameId]: score } }
-    })
-  }, [])
+  /**
+   * Auto-list every finished game on the public leaderboard instantly.
+   * Provisional & device-bound (no signature); the player can later tap
+   * ★ Enter MonHouse Cup to wallet-verify the entry and become prize-eligible.
+   */
+  const autoEnterCup = useCallback(
+    async (gameId, score) => {
+      try {
+        const meta = cupRef.current
+        const period = meta?.period?.id
+        if (!period || meta?.period?.open === false) return
+        const nm = NAME_RE.test(saveRef.current?.name || '') ? saveRef.current.name : 'Anonim'
+        const r = await fetch('/api/cup/submit', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ game: gameId, period, score, name: nm, device: deviceId.current }),
+        })
+        const j = await r.json().catch(() => null)
+        if (j?.ok) loadCup()
+      } catch {
+        /* offline — score stays local */
+      }
+    },
+    [loadCup]
+  )
+
+  const onScore = useCallback(
+    (gameId, score) => {
+      setSave((prev) => {
+        if (score <= (prev.best[gameId] || 0)) return prev
+        return { ...prev, best: { ...prev.best, [gameId]: score } }
+      })
+      if (score > 0) autoEnterCup(gameId, score)
+    },
+    [autoEnterCup]
+  )
 
   const handleActiveScore = useCallback(
     (s) => {
@@ -511,6 +549,45 @@ export default function App() {
     setCheerBusy(false)
   }
 
+  /** Free cheer — message only, no MON tx needed. Rate-limited server-side. */
+  const sendFreeCheer = async () => {
+    if (cheerBusy) return
+    if (!NAME_RE.test(save.name || '')) {
+      setNameDraft(save.name || '')
+      setNameOpen(true)
+      showToast('Set your player name first to post on the Cheer board!')
+      return
+    }
+    const msg = cheerMsg.trim()
+    setCheerBusy(true)
+    const ts = Date.now()
+    setCheers((prev) => [
+      { id: 'local-' + ts, name: save.name, message: msg, value: 0, free: true, ts },
+      ...prev,
+    ])
+    setCheerMsg('')
+    try {
+      const r = await fetch('/api/cheer', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          name: save.name,
+          message: msg,
+          value: 0,
+          txHash: '',
+          device: deviceId.current,
+          ts,
+        }),
+      })
+      const j = await r.json().catch(() => null)
+      if (!j?.ok) showToast(j?.error || 'Free cheer failed')
+      await loadCheers(true)
+    } catch {
+      /* optimistic entry stays */
+    }
+    setCheerBusy(false)
+  }
+
   const buyOrEquip = async (groupId, skin) => {
     const owned = save.owned[groupId]?.includes(skin.id)
     if (owned) {
@@ -691,6 +768,7 @@ export default function App() {
                         <span className={`cup-rank r${i < 3 ? i + 1 : 0}`}>#{i + 1}</span>
                         <span className="cup-who">
                           <strong>{e.name}</strong>
+                          {e.verified ? <span className="cup-verified">✓</span> : null}
                         </span>
                         <span className="cup-pts">{e.score}</span>
                       </div>
@@ -720,6 +798,7 @@ export default function App() {
                         <span className={`cup-rank r${i < 3 ? i + 1 : 0}`}>#{i + 1}</span>
                         <span className="cup-who">
                           <strong>{e.name}</strong>
+                          {e.verified ? <span className="cup-verified">✓</span> : null}
                           <span className="cup-game">{cup?.gameLabels?.[e.game] || ''}</span>
                         </span>
                         <span className="cup-pts">{e.score}</span>
@@ -1088,7 +1167,7 @@ export default function App() {
         <div className="section-head">
           <h2>♥ Cheer the House</h2>
           <span className="hint">
-            {cheerLive ? 'Live on-chain Monad board' : 'Tip MON & leave a message'}
+            {cheerLive ? 'Tips MON atau kirim cheer gratis' : 'Tip MON & leave a message'}
           </span>
         </div>
         <div className="cheer-card">
@@ -1124,6 +1203,9 @@ export default function App() {
             <button className="btn primary cheer-btn" disabled={cheerBusy} onClick={sendCheer}>
               {cheerBusy ? 'Sending…' : `Cheer ${fmtMon(cheerAmt)}`}
             </button>
+            <button className="btn ghost cheer-btn" disabled={cheerBusy} onClick={sendFreeCheer}>
+              Gratis
+            </button>
           </div>
         </div>
 
@@ -1133,7 +1215,9 @@ export default function App() {
               const isRealTx = c.txHash && String(c.txHash).startsWith('0x') && c.txHash.length >= 42
               return (
                 <div key={c.id} className="cheer-item">
-                  <span className="cheer-badge">{fmtMon(c.value)}</span>
+                  <span className={`cheer-badge ${c.free ? 'free' : ''}`}>
+                    {c.free ? 'gratis' : fmtMon(c.value)}
+                  </span>
                   <div className="cheer-body">
                     <div className="cheer-meta">
                       <strong>{c.name}</strong>
