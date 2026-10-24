@@ -620,6 +620,8 @@ export default function App() {
       closed: cupClosed,
       paused: !!cup?.pool?.paused,
       onSubmit: (s) => submitToCup(game.id, s),
+      leaders: (cup?.leaders?.[game.id] || []).slice(0, 5),
+      myDevice: deviceId.current,
     }
     return (
       <div className="screen game-screen">
