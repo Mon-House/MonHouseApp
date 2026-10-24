@@ -39,6 +39,19 @@
           "ts": 1792855346005
         }
       ]
+    },
+    "stack": {
+      "P20261025": [
+        {
+          "device": "143f3edc38a1bbbafbfd80ffed9208fd016f9da6e01dd17e8cf15e5571784dea",
+          "name": "Anonim",
+          "score": 4,
+          "address": "",
+          "pub": "",
+          "verified": false,
+          "ts": 1792855495547
+        }
+      ]
     }
   },
   "payouts": {}
