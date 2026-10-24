@@ -39,6 +39,19 @@
           "ts": 1792846887879
         }
       ]
+    },
+    "chick": {
+      "P20261025": [
+        {
+          "device": "bbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbbb",
+          "name": "DiagBot2",
+          "score": 33,
+          "address": "",
+          "pub": "",
+          "verified": false,
+          "ts": 1792847027628
+        }
+      ]
     }
   },
   "payouts": {}
