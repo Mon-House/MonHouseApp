@@ -1,5 +1,5 @@
 /**
- * JSON store for MonHouse (Cup + name claims + cheers) on Monad Testnet.
+ * JSON store for MonHouse (Cup + name claims + cheers) on Monad Mainnet.
  *
  * Dual-mode transparent storage:
  *  - On Vercel with CUP_GITHUB_TOKEN set: reads/writes `data/*.json` via the
@@ -20,10 +20,10 @@ const SEEDS = {
       perGameMon: 5,
       splitPct: [50, 30, 20],
       wallet: '0xe5b41b1e42580ddb14F277578D5f92Fc091DAD1d',
-      network: 'Monad Testnet (Chain ID 10143)',
+      network: 'Monad Mainnet (Chain ID 143)',
       closedPeriods: {},
       paused: false,
-      note: 'Free to play on Monad Testnet. Top 3 wallet-verified scores per game share the MON prize pool (50 / 30 / 20%).',
+      note: 'Free to play on Monad Mainnet. Top 3 wallet-verified scores per game share the MON prize pool (50 / 30 / 20%).',
     },
     entries: {},
     payouts: {},

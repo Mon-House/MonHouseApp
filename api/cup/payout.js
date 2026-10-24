@@ -1,5 +1,5 @@
 /**
- * POST /api/cup/payout — record an on-chain Monad Testnet payout for a Cup winner.
+ * POST /api/cup/payout — record an on-chain Monad Mainnet payout for a Cup winner.
  * The MonHouse wallet sends MON first, then this marks the tx hash so the
  * UI can show "paid ✓" with a Monadscan link. Protected by CUP_ADMIN_SECRET.
  *

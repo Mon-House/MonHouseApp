@@ -1,5 +1,5 @@
 /**
- * /api/cheer — public MonHouse cheer (tip) board on Monad Testnet.
+ * /api/cheer — public MonHouse cheer (tip) board on Monad Mainnet.
  *
  * GET  → { ok, cheers: [...] }  (newest first)
  * POST → record a cheer after the Monad wallet broadcast its MON payment:

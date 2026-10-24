@@ -1,9 +1,9 @@
 #!/usr/bin/env node
 /**
- * MonHouse Cup — Monad Testnet Payout Runner
+ * MonHouse Cup — Monad Mainnet Payout Runner
  * ------------------------------------------
  * Computes top 3 winners per game for a closed 5-day MonHouse Cup period
- * and records Monad Testnet `0x...` transaction hashes via POST /api/cup/payout.
+ * and records Monad Mainnet `0x...` transaction hashes via POST /api/cup/payout.
  *
  * Usage:
  *   node scripts/payout.mjs --dry-run
@@ -56,7 +56,7 @@ const targetId = requestedPeriod || `P${current.p - 1}`
 const poolMon = Number(arg('--pool', data.pool?.perGameMon ?? 5))
 const shares = SPLIT.map((pct) => Number(((poolMon * pct) / 100).toFixed(4)))
 
-console.log('🏆 MonHouse Cup — Monad Testnet Payout Runner')
+console.log('🏆 MonHouse Cup — Monad Mainnet Payout Runner')
 console.log(`   period: ${targetId} · pool: ${poolMon} MON/game · split: ${SPLIT.join(' / ')}%\n`)
 
 const plan = []

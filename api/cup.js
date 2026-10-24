@@ -1,12 +1,12 @@
 /**
- * GET /api/cup — current MonHouse Cup state on Monad Testnet.
+ * GET /api/cup — current MonHouse Cup state on Monad Mainnet.
  * Returns the active period, MON pool config, per-game top-10, and payouts.
  */
 import { readCup } from './lib/store.js'
 
 export const GAMES = ['chick', 'stack', 'rush', 'swat', 'dash']
 
-const PERIOD5_MS = 5 * 86400 * 1000 // 5-day Monad Testnet Cup epochs
+const PERIOD5_MS = 5 * 86400 * 1000 // 5-day Monad Cup epochs
 const ANCHOR_START = Date.parse('2026-10-05T16:59:00.000Z')
 const ANCHOR_P = 6911
 

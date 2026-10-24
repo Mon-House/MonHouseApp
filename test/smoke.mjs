@@ -76,7 +76,7 @@ assert('Bundled JS entry found', !!jsMatch)
 const bundleJs = readFileSync(path.join(distDir, jsMatch[1].slice(1)), 'utf8')
 
 assert('House wallet 0xe5b4…AD1d compiled into bundle', bundleJs.includes(EXPECTED_WALLET))
-assert('Monad Testnet Chain ID 10143 (0x279f) in bundle', bundleJs.includes('10143') && bundleJs.includes('0x279f'))
+assert('Monad Mainnet Chain ID 143 (0x8f) in bundle & no Testnet leftovers', bundleJs.includes('0x8f') && !bundleJs.includes('0x279f') && !bundleJs.includes('10143') && !bundleJs.includes('Testnet'))
 assert(
   'All 5 MonHouse mini-games in bundle & MonBullseye/MonSlice removed',
   ['MonCat', 'MonStack', 'MonRush', 'MonSwat', 'MonDash'].every((g) => bundleJs.includes(g)) &&

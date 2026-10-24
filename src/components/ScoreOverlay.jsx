@@ -7,7 +7,7 @@ export default function ScoreOverlay({ gameName, score, best, extra, onReplay, c
   const [cupResult, setCupResult] = useState(null) // { ok, rank?, error? }
 
   const share = async () => {
-    const text = `★ I scored ${score} in ${gameName} on MonHouse (Monad Testnet) ⚡ Can you beat me?`
+    const text = `★ I scored ${score} in ${gameName} on MonHouse (Monad Mainnet) ⚡ Can you beat me?`
     try {
       if (navigator.share) {
         await navigator.share({ title: 'MonHouse', text })

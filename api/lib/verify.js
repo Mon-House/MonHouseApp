@@ -1,5 +1,5 @@
 /**
- * EVM (Monad Testnet) Wallet Signature Verification for MonHouse.
+ * EVM (Monad Mainnet) Wallet Signature Verification for MonHouse.
  *
  * Primary scheme: EIP-191 personal_sign (secp256k1 recoverable ECDSA):
  *   keccak256("\x19Ethereum Signed Message:\n" + byteLength(message) + message)

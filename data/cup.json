@@ -4,8 +4,8 @@
     "perGameMon": 5,
     "splitPct": [50, 30, 20],
     "wallet": "0xe5b41b1e42580ddb14F277578D5f92Fc091DAD1d",
-    "network": "Monad Testnet (Chain ID 10143)",
-    "note": "Free to play on Monad Testnet! Every 5-day MonHouse Cup stakes 5 MON per game (25 MON total across all 5 games). Top 3 scores in each game take 50% / 30% / 20% (2.5 / 1.5 / 1.0 MON), verified via EIP-191 personal_sign wallet signatures.",
+    "network": "Monad Mainnet (Chain ID 143)",
+    "note": "Free to play on Monad Mainnet! Every 5-day MonHouse Cup stakes 5 MON per game (25 MON total across all 5 games). Top 3 scores in each game take 50% / 30% / 20% (2.5 / 1.5 / 1.0 MON), verified via EIP-191 personal_sign wallet signatures.",
     "closedPeriods": {},
     "paused": false
   },

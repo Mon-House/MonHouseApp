@@ -1,5 +1,5 @@
 /**
- * Cosmetic-only skins for MonHouse on Monad Testnet.
+ * Cosmetic-only skins for MonHouse on Monad Mainnet.
  * Prices are in internal MON units (100,000 units = 1 MON, so 1,000 = 0.01 MON).
  * Skins never affect gameplay — that is a hard rule of MonHouse.
  */

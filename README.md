@@ -1,14 +1,14 @@
-# MonHouse 🐾⚡ — Monad Testnet Absurd Cat Arcade
+# MonHouse 🐾⚡ — Monad Mainnet Absurd Cat Arcade
 
-**MonHouse** (migrated & rebranded from NimHouse) is a colorful, sharp arcade hub featuring **5 skill-based mini-games** starring absurd chonky cats on **Monad Testnet**.
+**MonHouse** (migrated & rebranded from NimHouse) is a colorful, sharp arcade hub featuring **5 skill-based mini-games** starring absurd chonky cats on **Monad Mainnet**.
 
-## Monad Testnet Configuration
-- **Network Name:** `Monad Testnet`
-- **Chain ID:** `10143` (`0x279f`)
+## Monad Mainnet Configuration
+- **Network Name:** `Monad`
+- **Chain ID:** `143` (`0x8f`)
 - **Native Token:** `MON` (18 decimals)
-- **Primary RPC:** `https://testnet-rpc.monad.xyz`
-- **Explorer:** `https://testnet.monadscan.com`
-- **Faucet:** `https://faucet.monad.xyz`
+- **Primary RPC:** `https://rpc.monad.xyz`
+- **Explorer:** `https://monadscan.com`
+- **Get MON:** bridge from other chains or buy on an exchange (no faucet on mainnet)
 
 ## 5 Mini-Games
 1. **MonCat** — Tap or press `Space` to pounce your absurd cat through crystal Monad pipes.
@@ -23,7 +23,7 @@ Copy `.env.example` to `.env` (or set Environment Variables in Vercel):
 ```env
 VITE_HOUSE_ADDRESS=0xe5b41b1e42580ddb14F277578D5f92Fc091DAD1d
 VITE_CHEER_ADDRESS=0xe5b41b1e42580ddb14F277578D5f92Fc091DAD1d
-VITE_MONAD_RPC=https://testnet-rpc.monad.xyz
+VITE_MONAD_RPC=https://rpc.monad.xyz
 ```
 
 ## Local Development

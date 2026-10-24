@@ -1,12 +1,12 @@
-# MonHouse — Panduan Deploy GitHub & Vercel (Monad Testnet)
+# MonHouse — Panduan Deploy GitHub & Vercel (Monad Mainnet)
 
-## 1. Spesifikasi Jaringan Monad Testnet
-- **Network Name:** `Monad Testnet`
-- **Chain ID:** `10143` (`0x279f`)
+## 1. Spesifikasi Jaringan Monad Mainnet
+- **Network Name:** `Monad`
+- **Chain ID:** `143` (`0x8f`)
 - **Symbol:** `MON` (`18 decimals`)
-- **RPC URL:** `https://testnet-rpc.monad.xyz`
-- **Block Explorer:** `https://testnet.monadscan.com`
-- **Faucet:** `https://faucet.monad.xyz`
+- **RPC URL:** `https://rpc.monad.xyz`
+- **Block Explorer:** `https://monadscan.com`
+- **Get MON:** bridge antar-chain atau beli di exchange (tidak ada faucet di mainnet)
 
 ## 2. Alamat House Wallet
 Default yang sudah dikonfigurasi di aplikasi & Cup Pool:

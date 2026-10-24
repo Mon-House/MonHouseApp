@@ -1,32 +1,30 @@
 /**
- * Monad Testnet EVM Wallet & JSON-RPC Integration for MonHouse.
+ * Monad Mainnet EVM Wallet & JSON-RPC Integration for MonHouse.
  *
- * Official Monad Testnet Specs:
- *   - Network Name : Monad Testnet
- *   - Chain ID     : 10143 (0x279f)
+ * Official Monad Mainnet Specs:
+ *   - Network Name : Monad
+ *   - Chain ID     : 143 (0x8f)
  *   - Currency     : MON (18 decimals)
- *   - Primary RPC  : https://testnet-rpc.monad.xyz
- *   - Fallback RPC : https://rpc-testnet.monadinfra.com
- *   - Explorer     : https://testnet.monadscan.com
- *   - Faucet       : https://faucet.monad.xyz
+ *   - Primary RPC  : https://rpc.monad.xyz
+ *   - Fallback RPC : https://rpc1.monad.xyz / https://rpc3.monad.xyz
+ *   - Explorers    : https://monadscan.com / https://monadvision.com
  */
 
-export const MONAD_TESTNET = {
-  chainIdDec: 10143,
-  chainIdHex: '0x279f',
-  chainName: 'Monad Testnet',
+export const MONAD_MAINNET = {
+  chainIdDec: 143,
+  chainIdHex: '0x8f',
+  chainName: 'Monad',
   nativeCurrency: {
     name: 'Monad',
     symbol: 'MON',
     decimals: 18,
   },
   rpcUrls: [
-    'https://testnet-rpc.monad.xyz',
-    'https://rpc-testnet.monadinfra.com',
-    'https://rpc.ankr.com/monad_testnet',
+    'https://rpc.monad.xyz',
+    'https://rpc1.monad.xyz',
+    'https://rpc3.monad.xyz',
   ],
-  blockExplorerUrls: ['https://testnet.monadscan.com', 'https://testnet.monadvision.com'],
-  faucetUrl: 'https://faucet.monad.xyz',
+  blockExplorerUrls: ['https://monadscan.com', 'https://monadvision.com'],
 }
 
 /**
@@ -89,10 +87,10 @@ export function formatWeiToMon(weiHexOrBigInt) {
 }
 
 /**
- * Direct read-only JSON-RPC call against Monad Testnet public RPC.
+ * Direct read-only JSON-RPC call against Monad Mainnet public RPC.
  */
 export async function monadRpc(method, params = []) {
-  for (const url of MONAD_TESTNET.rpcUrls.slice(0, 2)) {
+  for (const url of MONAD_MAINNET.rpcUrls.slice(0, 2)) {
     try {
       const ctrl = new AbortController()
       const timer = setTimeout(() => ctrl.abort(), 5000)
@@ -139,18 +137,18 @@ export function getInjectedProvider() {
 }
 
 /**
- * Switch or add Monad Testnet (Chain ID 10143 / 0x279f) in the user's EVM wallet.
+ * Switch or add Monad Mainnet (Chain ID 143 / 0x8f) in the user's EVM wallet.
  */
-export async function ensureMonadTestnet(provider = getInjectedProvider()) {
+export async function ensureMonadMainnet(provider = getInjectedProvider()) {
   if (!provider) throw new Error('No EVM wallet detected (install MetaMask, Rabby, Phantom, or OKX Wallet)')
   const currentChain = await provider.request({ method: 'eth_chainId' }).catch(() => null)
-  if (currentChain && parseInt(currentChain, 16) === MONAD_TESTNET.chainIdDec) {
-    return MONAD_TESTNET.chainIdHex
+  if (currentChain && parseInt(currentChain, 16) === MONAD_MAINNET.chainIdDec) {
+    return MONAD_MAINNET.chainIdHex
   }
   try {
     await provider.request({
       method: 'wallet_switchEthereumChain',
-      params: [{ chainId: MONAD_TESTNET.chainIdHex }],
+      params: [{ chainId: MONAD_MAINNET.chainIdHex }],
     })
   } catch (switchErr) {
     const code = switchErr?.code ?? switchErr?.data?.originalError?.code
@@ -160,11 +158,11 @@ export async function ensureMonadTestnet(provider = getInjectedProvider()) {
         method: 'wallet_addEthereumChain',
         params: [
           {
-            chainId: MONAD_TESTNET.chainIdHex,
-            chainName: MONAD_TESTNET.chainName,
-            nativeCurrency: MONAD_TESTNET.nativeCurrency,
-            rpcUrls: [MONAD_TESTNET.rpcUrls[0]],
-            blockExplorerUrls: [MONAD_TESTNET.blockExplorerUrls[0]],
+            chainId: MONAD_MAINNET.chainIdHex,
+            chainName: MONAD_MAINNET.chainName,
+            nativeCurrency: MONAD_MAINNET.nativeCurrency,
+            rpcUrls: [MONAD_MAINNET.rpcUrls[0]],
+            blockExplorerUrls: [MONAD_MAINNET.blockExplorerUrls[0]],
           },
         ],
       })
@@ -172,18 +170,18 @@ export async function ensureMonadTestnet(provider = getInjectedProvider()) {
       throw switchErr
     }
   }
-  return MONAD_TESTNET.chainIdHex
+  return MONAD_MAINNET.chainIdHex
 }
 
 /**
- * Live Monad Testnet EVM wallet adapter.
+ * Live Monad Mainnet EVM wallet adapter.
  */
 function createLiveMonadProvider(eth) {
   return {
     _demo: false,
     provider: eth,
     async listAccounts() {
-      await ensureMonadTestnet(eth)
+      await ensureMonadMainnet(eth)
       const accs = await eth.request({ method: 'eth_requestAccounts' })
       return Array.isArray(accs) ? accs : []
     },
@@ -196,7 +194,7 @@ function createLiveMonadProvider(eth) {
       return hex ? parseInt(hex, 16) : null
     },
     async switchToMonad() {
-      return ensureMonadTestnet(eth)
+      return ensureMonadMainnet(eth)
     },
     async sign(message, fromAddr) {
       const accs = fromAddr ? [fromAddr] : await eth.request({ method: 'eth_requestAccounts' })
@@ -211,7 +209,7 @@ function createLiveMonadProvider(eth) {
     },
     async isConsensusEstablished() {
       const cid = await this.getChainId()
-      return cid === MONAD_TESTNET.chainIdDec
+      return cid === MONAD_MAINNET.chainIdDec
     },
     async getBlockNumber() {
       const hex =
@@ -230,10 +228,10 @@ function createLiveMonadProvider(eth) {
       return this.sendBasicTransactionWithData({ recipient, value, data: '' })
     },
     async sendBasicTransactionWithData({ recipient, value, data }) {
-      await ensureMonadTestnet(eth)
+      await ensureMonadMainnet(eth)
       const accs = await eth.request({ method: 'eth_requestAccounts' })
       const from = accs?.[0]
-      if (!from) throw new Error('Connect your Monad Testnet wallet first')
+      if (!from) throw new Error('Connect your Monad wallet first')
       const txParams = {
         from,
         to: recipient,
@@ -266,9 +264,9 @@ function createLiveMonadProvider(eth) {
 }
 
 /**
- * Simulated Monad Testnet provider used when no browser wallet extension is
+ * Simulated Monad provider used when no browser wallet extension is
  * present (e.g. sandboxed preview / mobile webview). Still queries real Monad
- * Testnet block numbers when network access is available!
+ * Mainnet block numbers when network access is available!
  */
 function createDemoMonadProvider() {
   let storedAddr = null
@@ -281,7 +279,7 @@ function createDemoMonadProvider() {
   } catch {
     storedAddr = '0x714C00000000000000000000000000000000CAFE'
   }
-  let demoBalanceUnits = 1_250_000 // 12.50 MON simulated testnet balance
+  let demoBalanceUnits = 1_250_000 // 12.50 MON simulated balance
 
   return {
     _demo: true,
@@ -294,11 +292,11 @@ function createDemoMonadProvider() {
       return [storedAddr]
     },
     async getChainId() {
-      return MONAD_TESTNET.chainIdDec
+      return MONAD_MAINNET.chainIdDec
     },
     async switchToMonad() {
       await delay(200)
-      return MONAD_TESTNET.chainIdHex
+      return MONAD_MAINNET.chainIdHex
     },
     async sign() {
       await delay(420)
@@ -353,7 +351,7 @@ export function getWallet({ forceRefresh = false } = {}) {
         mode: 'demo',
         monad: demo,
         nimiq: demo,
-        error: 'No EVM wallet extension found — running in Monad Testnet Demo Mode',
+        error: 'No EVM wallet extension found — running in Monad Demo Mode',
       }
     })()
   }
@@ -400,15 +398,15 @@ export const shortAddr = (addr) => {
 }
 
 export const explorerTxUrl = (txHash) =>
-  txHash ? `${MONAD_TESTNET.blockExplorerUrls[0]}/tx/${txHash}` : MONAD_TESTNET.blockExplorerUrls[0]
+  txHash ? `${MONAD_MAINNET.blockExplorerUrls[0]}/tx/${txHash}` : MONAD_MAINNET.blockExplorerUrls[0]
 
 export const explorerAddrUrl = (addr) =>
-  addr ? `${MONAD_TESTNET.blockExplorerUrls[0]}/address/${addr}` : MONAD_TESTNET.blockExplorerUrls[0]
+  addr ? `${MONAD_MAINNET.blockExplorerUrls[0]}/address/${addr}` : MONAD_MAINNET.blockExplorerUrls[0]
 
 /**
  * High-level reactive wallet initializer used by App.jsx.
  * Auto-detects injected EVM wallets (MetaMask, Rabby, Phantom EVM, EIP-6963),
- * tracks Chain ID 10143 (Monad Testnet), MON balance, signing, and MON transfers,
+ * tracks Chain ID 143 (Monad Mainnet), MON balance, signing, and MON transfers,
  * with graceful Demo Mode fallback when no browser extension is installed.
  */
 export async function initWallet(onChange) {
@@ -420,7 +418,7 @@ export async function initWallet(onChange) {
     mode: 'demo',
     address: '',
     chainId: null,
-    isMonadTestnet: false,
+    isMonadMainnet: false,
     hasProvider,
     balanceMon: null,
   }
@@ -430,8 +428,8 @@ export async function initWallet(onChange) {
       const demoAccs = await w.monad.getSilentAccounts()
       state.mode = 'demo'
       state.address = demoAccs[0] || ''
-      state.chainId = MONAD_TESTNET.chainIdDec
-      state.isMonadTestnet = true
+      state.chainId = MONAD_MAINNET.chainIdDec
+      state.isMonadMainnet = true
       state.balanceMon = '12.50'
       onChange?.({ ...state })
       return
@@ -439,11 +437,11 @@ export async function initWallet(onChange) {
     const accs = await w.monad.getSilentAccounts()
     const cid = await w.monad.getChainId()
     state.chainId = cid
-    state.isMonadTestnet = cid === MONAD_TESTNET.chainIdDec
+    state.isMonadMainnet = cid === MONAD_MAINNET.chainIdDec
     if (accs.length > 0) {
       state.mode = 'monad'
       state.address = accs[0]
-      if (state.isMonadTestnet) {
+      if (state.isMonadMainnet) {
         const balStr = await w.monad.getBalance(accs[0])
         state.balanceMon = balStr ? balStr.replace(/\s*MON$/, '') : null
       } else {

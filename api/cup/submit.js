@@ -1,5 +1,5 @@
 /**
- * POST /api/cup/submit — enter the current MonHouse Cup with a Monad Testnet wallet-signed score.
+ * POST /api/cup/submit — enter the current MonHouse Cup with a Monad Mainnet wallet-signed score.
  *
  * Body: { game, period, score, name, device, address, message, publicKey?, signature }
  */

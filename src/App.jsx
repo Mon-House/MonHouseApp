@@ -16,7 +16,7 @@ import { isMuted, setMuted, sfx } from './sound.js'
 import {
   CHEER_ADDRESS,
   HOUSE_ADDRESS,
-  MONAD_TESTNET,
+  MONAD_MAINNET,
   explorerAddrUrl,
   explorerTxUrl,
   fmtMon,
@@ -175,7 +175,7 @@ export default function App() {
     mode: 'loading',
     address: '',
     chainId: null,
-    isMonadTestnet: false,
+    isMonadMainnet: false,
     hasProvider: false,
     balanceMon: null,
   })
@@ -266,7 +266,7 @@ export default function App() {
     setNetBusy(false)
     if (res.ok) {
       await wallet.refresh?.()
-      showToast('Monad Testnet wallet connected! ⚡')
+      showToast('Monad Mainnet wallet connected! ⚡')
     } else if (res.error === 'no-wallet') {
       showToast('No EVM wallet detected (MetaMask / Rabby / Phantom) — using Demo Mode')
     } else {
@@ -281,7 +281,7 @@ export default function App() {
     setNetBusy(false)
     if (res.ok) {
       await wallet.refresh?.()
-      showToast('Switched to Monad Testnet (Chain ID 10143)! ⚡')
+      showToast('Switched to Monad Mainnet (Chain ID 143)! ⚡')
     } else {
       showToast(res.error || 'Could not switch network in wallet')
     }
@@ -306,11 +306,11 @@ export default function App() {
       if (wallet.mode !== 'monad' || !wallet.sign) {
         if (wallet.hasProvider && wallet.connect) {
           const c = await wallet.connect()
-          if (!c.ok) return { ok: false, error: 'Connect your Monad Testnet wallet first to sign scores' }
+          if (!c.ok) return { ok: false, error: 'Connect your Monad wallet first to sign scores' }
         } else {
           return {
             ok: false,
-            error: 'Install MetaMask / Rabby on Monad Testnet to sign verified Cup scores',
+            error: 'Install MetaMask / Rabby on Monad to sign verified Cup scores',
           }
         }
       }
@@ -491,14 +491,14 @@ export default function App() {
       })
       const j = await r.json().catch(() => null)
       if (r.ok && j?.ok) {
-        showToast(`Thanks for the ${fmtMon(cheerAmt)} cheer on Monad Testnet! ♥`)
+        showToast(`Thanks for the ${fmtMon(cheerAmt)} cheer on Monad! ♥`)
         await loadCheers(true)
         wallet.refresh?.()
       } else {
         showToast(`MON sent! (${j?.error || 'board sync pending'})`)
       }
     } catch {
-      showToast('MON sent on Monad Testnet!')
+      showToast('MON sent on Monad!')
     }
     setCheerBusy(false)
   }
@@ -534,7 +534,7 @@ export default function App() {
     showToast(
       res.demo
         ? `Unlocked ${skin.name} (Demo Mode)!`
-        : `Unlocked ${skin.name} on Monad Testnet! ✨`
+        : `Unlocked ${skin.name} on Monad! ✨`
     )
   }
 
@@ -653,18 +653,18 @@ export default function App() {
           </div>
           <div>
             <div className="brand-name">
-              MonHouse <span className="brand-pill">TESTNET</span>
+              MonHouse <span className="brand-pill">MAINNET</span>
             </div>
             <div className="brand-sub">5 Absurd Cat Skill Games · Monad</div>
           </div>
         </div>
         <div className="topbar-right">
           {wallet.mode === 'monad' ? (
-            wallet.isMonadTestnet ? (
+            wallet.isMonadMainnet ? (
               <button
                 className="wallet-pill live"
                 onClick={() => wallet.refresh?.()}
-                title={`${wallet.address} on Monad Testnet (Chain ID 10143)`}
+                title={`${wallet.address} on Monad Mainnet (Chain ID 143)`}
               >
                 <span className="dot live" />
                 <span>
@@ -677,10 +677,10 @@ export default function App() {
                 className="wallet-pill warn"
                 onClick={handleSwitchNetwork}
                 disabled={netBusy}
-                title="Switch wallet to Monad Testnet (Chain ID 10143)"
+                title="Switch wallet to Monad Mainnet (Chain ID 143)"
               >
                 <span className="dot warn" />
-                <span>{netBusy ? 'Switching…' : 'Switch to Monad (10143)'}</span>
+                <span>{netBusy ? 'Switching…' : 'Switch to Monad (143)'}</span>
               </button>
             )
           ) : (
@@ -688,7 +688,7 @@ export default function App() {
               className="wallet-pill connect"
               onClick={handleConnectWallet}
               disabled={netBusy}
-              title="Connect MetaMask, Rabby, or any EVM wallet on Monad Testnet"
+              title="Connect MetaMask, Rabby, or any EVM wallet on Monad"
             >
               <span className="dot connect" />
               <span>{netBusy ? 'Connecting…' : wallet.hasProvider ? 'Connect Monad' : 'Demo · Connect'}</span>
@@ -700,30 +700,22 @@ export default function App() {
         </div>
       </header>
 
-      {/* Monad Testnet Network Strip */}
+      {/* Monad Mainnet Network Strip */}
       <div className="monad-strip">
         <div className="monad-strip-left">
           <span className="monad-diamond">◈</span>
           <span>
-            <strong>Monad Testnet</strong> · Chain ID <code>10143</code> · Token <code>MON</code>
+            <strong>Monad Mainnet</strong> · Chain ID <code>143</code> · Token <code>MON</code>
           </span>
         </div>
         <div className="monad-strip-actions">
-          {wallet.hasProvider && !wallet.isMonadTestnet && (
+          {wallet.hasProvider && !wallet.isMonadMainnet && (
             <button className="mini-chip-btn" onClick={handleSwitchNetwork} disabled={netBusy}>
               + Add Chain
             </button>
           )}
           <a
-            href={MONAD_TESTNET.faucetUrl}
-            target="_blank"
-            rel="noopener noreferrer"
-            className="mini-chip-link"
-          >
-            ◈ MON Faucet ↗
-          </a>
-          <a
-            href={MONAD_TESTNET.blockExplorerUrls[0]}
+            href={MONAD_MAINNET.blockExplorerUrls[0]}
             target="_blank"
             rel="noopener noreferrer"
             className="mini-chip-link"
@@ -736,7 +728,7 @@ export default function App() {
       {/* Vibrant Monad Hero Showcase */}
       <section className="hero-banner">
         <div className="hero-copy">
-          <div className="hero-kicker">⚡ POWERED BY MONAD TESTNET</div>
+          <div className="hero-kicker">⚡ POWERED BY MONAD MAINNET</div>
           <h1 className="hero-title">
             Absurd Cats. <br />
             <span>Pure Arcade Skill.</span>
@@ -808,10 +800,10 @@ export default function App() {
         </div>
       </section>
 
-      {/* MonHouse Cup on Monad Testnet */}
+      {/* MonHouse Cup on Monad Mainnet */}
       <section className="section">
         <div className="section-head">
-          <h2>★ MonHouse Cup · Monad Testnet</h2>
+          <h2>★ MonHouse Cup · Monad Mainnet</h2>
           <span className="hint">
             {cup?.pool?.paused
               ? 'Paused'
@@ -928,7 +920,7 @@ export default function App() {
           })()}
 
           <div className="cup-foot">
-            House Wallet (Monad Testnet):{' '}
+            House Wallet (Monad Mainnet):{' '}
             <a
               href={explorerAddrUrl(cup?.pool?.wallet || HOUSE_ADDRESS)}
               target="_blank"
@@ -946,7 +938,7 @@ export default function App() {
       <section className="section">
         <div className="section-head">
           <h2>✦ Absurd Cat Outfits & Skins</h2>
-          <span className="hint">100% Cosmetic · Paid in Testnet MON</span>
+          <span className="hint">100% Cosmetic · Paid in MON</span>
         </div>
         {SKIN_GROUPS.map((grp) => (
           <div key={grp.id} className="skin-group">
@@ -987,7 +979,7 @@ export default function App() {
         <div className="section-head">
           <h2>♥ Cheer the House</h2>
           <span className="hint">
-            {cheerLive ? 'Live on-chain Monad Testnet board' : 'Tip MON & leave a message'}
+            {cheerLive ? 'Live on-chain Monad board' : 'Tip MON & leave a message'}
           </span>
         </div>
         <div className="cheer-card">
@@ -1063,7 +1055,7 @@ export default function App() {
       </section>
 
       <footer className="foot">
-        MonHouse · Built on <strong>Monad Testnet (Chain ID 10143)</strong> · Pure skill, cosmetic
+        MonHouse · Built on <strong>Monad Mainnet (Chain ID 143)</strong> · Pure skill, cosmetic
         MON skins only ✦
       </footer>
 

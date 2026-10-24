@@ -1,5 +1,5 @@
 /**
- * POST /api/name/claim — claim (or re-claim) a player name with a Monad Testnet wallet signature.
+ * POST /api/name/claim — claim (or re-claim) a player name with a Monad Mainnet wallet signature.
  *
  * Body: { name, device, message, address, publicKey?, signature }
  */
