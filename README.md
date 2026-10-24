@@ -217,7 +217,6 @@ Full walkthrough (Bahasa Indonesia): [`docs/MONAD_DEPLOY.md`](docs/MONAD_DEPLOY.
 
 ## 🙏 Acknowledgements
 
-- **[NimHouse](https://github.com/sasam44/nimhouse)** — the original open-source Nimiq arcade this project was migrated and rebranded from. 🐾
 - **[Monad Labs](https://www.monad.xyz)** — for a chain where 0.6s finality makes on-chain arcade payouts feel instant.
 
 ## ⚠️ Disclaimer
