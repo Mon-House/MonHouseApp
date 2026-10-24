@@ -67,6 +67,29 @@ export default function ScoreOverlay({ gameName, score, best, extra, onReplay, c
             )}
           </div>
         )}
+        {cup && (
+          <div className="overlay-lb">
+            <div className="overlay-lb-head">
+              ★ {gameName} — Cup Standings
+            </div>
+            {(cup.leaders?.length || 0) === 0 ? (
+              <div className="overlay-lb-empty">
+                Belum ada skor terdaftar — jadilah yang pertama!
+              </div>
+            ) : (
+              cup.leaders.map((e, i) => (
+                <div
+                  key={(e.address || e.device) + i}
+                  className={`overlay-lb-row ${e.device === cup.myDevice ? 'mine' : ''}`}
+                >
+                  <span className="overlay-lb-rank">#{i + 1}</span>
+                  <span className="overlay-lb-name">{e.name}</span>
+                  <span className="overlay-lb-score">{e.score}</span>
+                </div>
+              ))
+            )}
+          </div>
+        )}
         <div className="overlay-actions">
           <button className="btn primary" onClick={onReplay}>
             Play again

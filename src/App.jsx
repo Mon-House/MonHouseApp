@@ -189,6 +189,7 @@ export default function App() {
   const [cheerBusy, setCheerBusy] = useState(false)
   const [cup, setCup] = useState(null)
   const [nowTick, setNowTick] = useState(Date.now())
+  const [lbOpen, setLbOpen] = useState(false)
   const [nameOpen, setNameOpen] = useState(false)
   const [nameDraft, setNameDraft] = useState('')
   const [nameClaim, setNameClaim] = useState(null)
@@ -630,6 +631,29 @@ export default function App() {
             <img src={catHeroImg} alt="" className="mini-cat-icon" />
             <span>{game.name}</span>
           </div>
+          <button
+            className="icon-btn round"
+            onClick={() => setLbOpen(true)}
+            aria-label="Leaderboard"
+            title="Lihat leaderboard MonHouse Cup"
+          >
+            <svg
+              width="17"
+              height="17"
+              viewBox="0 0 24 24"
+              fill="none"
+              stroke="#fde047"
+              strokeWidth="2"
+              strokeLinecap="round"
+              strokeLinejoin="round"
+            >
+              <path d="M8 21h8" />
+              <path d="M12 17v4" />
+              <path d="M7 4h10v6a5 5 0 0 1-10 0V4z" />
+              <path d="M7 6H4a1 1 0 0 0-1 1c0 2.5 2 4 4 4" />
+              <path d="M17 6h3a1 1 0 0 1 1 1c0 2.5-2 4-4 4" />
+            </svg>
+          </button>
           <button className="icon-btn round" onClick={toggleMute} aria-label="Toggle sound">
             {soundIcon}
           </button>
@@ -641,6 +665,78 @@ export default function App() {
           onScore={handleActiveScore}
           cup={cupProps}
         />
+        {lbOpen && (
+          <div className="overlay" onClick={() => setLbOpen(false)}>
+            <div className="overlay-card lb-card" onClick={(e) => e.stopPropagation()}>
+              <div className="overlay-tag">★ MONHOUSE CUP — LIVE STANDINGS</div>
+              <h3 className="lb-title">{game.name} · Top 10</h3>
+              {(() => {
+                const rows = cup?.leaders?.[game.id] || []
+                if (rows.length === 0)
+                  return (
+                    <div className="cheer-empty">
+                      Belum ada skor terdaftar di {game.name} — main satu round dan jadilah yang
+                      pertama!
+                    </div>
+                  )
+                return (
+                  <div className="cup-board compact">
+                    {rows.map((e, i) => (
+                      <div
+                        key={(e.address || e.device) + i}
+                        className={`cup-row ${e.device === deviceId.current ? 'mine' : ''}`}
+                      >
+                        <span className={`cup-rank r${i < 3 ? i + 1 : 0}`}>#{i + 1}</span>
+                        <span className="cup-who">
+                          <strong>{e.name}</strong>
+                        </span>
+                        <span className="cup-pts">{e.score}</span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
+              <h3 className="lb-title">Unified · Top 5 (skor tertinggi lintas game)</h3>
+              {(() => {
+                const rows = cup?.overall || []
+                const tiers = cup?.pool?.tiersMon || [180, 150, 120, 90, 60]
+                const txs = cup?.payouts?.txs || {}
+                if (rows.length === 0)
+                  return (
+                    <div className="cheer-empty">
+                      Belum ada pemain di papan unified — total {cup?.pool?.totalMon ?? 600} MON
+                      menunggu 5 pemain terbaik!
+                    </div>
+                  )
+                return (
+                  <div className="cup-board compact">
+                    {rows.slice(0, tiers.length).map((e, i) => (
+                      <div
+                        key={(e.address || e.device) + i}
+                        className={`cup-row ${e.device === deviceId.current ? 'mine' : ''}`}
+                      >
+                        <span className={`cup-rank r${i < 3 ? i + 1 : 0}`}>#{i + 1}</span>
+                        <span className="cup-who">
+                          <strong>{e.name}</strong>
+                          <span className="cup-game">{cup?.gameLabels?.[e.game] || ''}</span>
+                        </span>
+                        <span className="cup-pts">{e.score}</span>
+                        <span className={`cup-prize ${txs[String(i + 1)] ? 'paid' : ''}`}>
+                          {txs[String(i + 1)] ? 'paid ✓' : `${tiers[i]} MON`}
+                        </span>
+                      </div>
+                    ))}
+                  </div>
+                )
+              })()}
+              <div className="overlay-actions">
+                <button className="btn primary" onClick={() => setLbOpen(false)}>
+                  Lanjut main
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
         {nameModal}
         {toast && <div className="toast">{toast}</div>}
       </div>
