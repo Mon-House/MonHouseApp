@@ -47,7 +47,9 @@ export default async function handler(req, res) {
   res.setHeader('Access-Control-Allow-Origin', '*')
   res.setHeader('Cache-Control', 'no-store')
   try {
-    const data = await readCup()
+    // Always read the ledger fresh — the Cup board is the product's core,
+    // so standings must be consistent the moment a score lands.
+    const data = await readCup({ fresh: true })
     const period = cupPeriod(data.pool?.closeAt)
 
     const periodsWithEntries = (p) =>
