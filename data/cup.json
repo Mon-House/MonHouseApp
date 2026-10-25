@@ -92,6 +92,19 @@
           "ts": 1792891708344
         }
       ]
+    },
+    "swat": {
+      "P20261025": [
+        {
+          "device": "58e4ad60a44a65e414001e38c896988eefbcb0d95c0cfeb51f29b31e183a9448",
+          "name": "Anonim",
+          "score": 17,
+          "address": "",
+          "pub": "",
+          "verified": false,
+          "ts": 1792905093717
+        }
+      ]
     }
   },
   "payouts": {}
