@@ -37,6 +37,15 @@
           "pub": "",
           "verified": false,
           "ts": 1792855346005
+        },
+        {
+          "device": "c2193ed631a367263d912666b05b8f66a45899ad4b342076249b57f13186ec29",
+          "name": "Anonim",
+          "score": 1,
+          "address": "",
+          "pub": "",
+          "verified": false,
+          "ts": 1792891544980
         }
       ]
     },
